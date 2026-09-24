@@ -1,7 +1,13 @@
 "use client";
 
 import { trackActivity } from "@/lib/analytics";
-import { apiClient, getUser, removeAuthToken, removeUser } from "@/utils/api";
+import {
+  apiClient,
+  AUTH_CHANGED_EVENT,
+  getUser,
+  removeAuthToken,
+  removeUser,
+} from "@/utils/api";
 import {
   Bell,
   Briefcase,
@@ -50,11 +56,28 @@ export default function AppSidebar() {
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     setCollapsed(raw === "1");
-    const user = getUser();
-    setRole(user?.role ?? null);
-    setHasUser(Boolean(user));
-    setUserName(user?.name ?? "");
   }, []);
+
+  // Login, logout, and the axios interceptor's silent token refresh all happen
+  // without unmounting this persistent layout component, so a one-time read on
+  // mount would go stale the moment any of those occur on another page or tab.
+  // Resync on navigation (cheap, covers most cases) and on the explicit
+  // auth-changed/storage events (covers same-page and cross-tab changes).
+  useEffect(() => {
+    const syncAuthState = () => {
+      const user = getUser();
+      setRole(user?.role ?? null);
+      setHasUser(Boolean(user));
+      setUserName(user?.name ?? "");
+    };
+    syncAuthState();
+    window.addEventListener(AUTH_CHANGED_EVENT, syncAuthState);
+    window.addEventListener("storage", syncAuthState);
+    return () => {
+      window.removeEventListener(AUTH_CHANGED_EVENT, syncAuthState);
+      window.removeEventListener("storage", syncAuthState);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     if (!accountOpen) return;

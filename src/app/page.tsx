@@ -1,26 +1,36 @@
 "use client";
 
-import { User as UserType } from "@/types";
 import { getUser } from "@/utils/api";
 import {
   ArrowRight,
   Briefcase,
   Globe,
-  LayoutDashboard,
   Search,
   Shield,
   TrendingUp,
   Users,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 export default function HomePage() {
-  const [user, setUser] = useState<UserType | null>(null);
+  const router = useRouter();
+  const [checkedAuth, setCheckedAuth] = useState(false);
 
   useEffect(() => {
-    setUser(getUser());
-  }, []);
+    if (getUser()) {
+      router.replace("/jobs");
+      return;
+    }
+    setCheckedAuth(true);
+  }, [router]);
+
+  // Signed-in users are redirected to /jobs above — this marketing landing page
+  // is only ever meant for signed-out visitors, so avoid flashing it first.
+  if (!checkedAuth) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen">
@@ -66,31 +76,13 @@ export default function HomePage() {
                 <Search className="mr-2 h-5 w-5" aria-hidden />
                 Browse jobs
               </Link>
-              {!user ? (
-                <Link
-                  href="/register"
-                  className="inline-flex items-center justify-center rounded-2xl border border-border/70 bg-card/80 px-8 py-4 text-base font-semibold text-foreground shadow-lg shadow-foreground/5 backdrop-blur-md transition-all hover:border-accent/50 hover:bg-card hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  <Briefcase className="mr-2 h-5 w-5 text-accent" aria-hidden />
-                  Create account
-                </Link>
-              ) : user.role === "employer" ? (
-                <Link
-                  href="/my-jobs"
-                  className="inline-flex items-center justify-center rounded-2xl border border-border/70 bg-card/80 px-8 py-4 text-base font-semibold text-foreground shadow-lg shadow-foreground/5 backdrop-blur-md transition-all hover:border-accent/50 hover:bg-card hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  <LayoutDashboard className="mr-2 h-5 w-5 text-accent" aria-hidden />
-                  My jobs
-                </Link>
-              ) : (
-                <Link
-                  href="/profile"
-                  className="inline-flex items-center justify-center rounded-2xl border border-border/70 bg-card/80 px-8 py-4 text-base font-semibold text-foreground shadow-lg shadow-foreground/5 backdrop-blur-md transition-all hover:border-accent/50 hover:bg-card hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  <Users className="mr-2 h-5 w-5 text-accent" aria-hidden />
-                  Your profile
-                </Link>
-              )}
+              <Link
+                href="/register"
+                className="inline-flex items-center justify-center rounded-2xl border border-border/70 bg-card/80 px-8 py-4 text-base font-semibold text-foreground shadow-lg shadow-foreground/5 backdrop-blur-md transition-all hover:border-accent/50 hover:bg-card hover:shadow-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <Briefcase className="mr-2 h-5 w-5 text-accent" aria-hidden />
+                Create account
+              </Link>
             </div>
           </div>
         </div>
@@ -208,65 +200,25 @@ export default function HomePage() {
         />
         <div className="relative mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
           <h2 className="mb-4 text-3xl font-extrabold tracking-tight text-white md:text-4xl">
-            {user ? "Welcome back" : "Ready when you are"}
+            Ready when you are
           </h2>
           <p className="mx-auto mb-10 max-w-xl text-lg text-white/90">
-            {user
-              ? user.role === "employer"
-                ? "Manage listings and applicants from your dashboard."
-                : "Keep exploring roles, saved jobs, and your applications in one place."
-              : "Create a free account to post jobs, apply, or save listings for later."}
+            Create a free account to post jobs, apply, or save listings for later.
           </p>
           <div className="flex flex-col justify-center gap-3 sm:flex-row sm:gap-4">
-            {!user ? (
-              <>
-                <Link
-                  href="/register"
-                  className="inline-flex items-center justify-center rounded-2xl bg-card px-8 py-4 text-base font-semibold text-link shadow-xl shadow-foreground/15 transition-all hover:bg-accent-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
-                >
-                  Get started
-                  <ArrowRight className="ml-2 h-5 w-5" aria-hidden />
-                </Link>
-                <Link
-                  href="/jobs"
-                  className="inline-flex items-center justify-center rounded-2xl border-2 border-border/40 bg-card/10 px-8 py-4 text-base font-semibold text-white backdrop-blur-sm transition-all hover:bg-card/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
-                >
-                  Browse jobs
-                </Link>
-              </>
-            ) : user.role === "employer" ? (
-              <>
-                <Link
-                  href="/post-job"
-                  className="inline-flex items-center justify-center rounded-2xl bg-card px-8 py-4 text-base font-semibold text-link shadow-xl shadow-foreground/15 transition-all hover:bg-accent-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
-                >
-                  Post a job
-                  <ArrowRight className="ml-2 h-5 w-5" aria-hidden />
-                </Link>
-                <Link
-                  href="/my-jobs"
-                  className="inline-flex items-center justify-center rounded-2xl border-2 border-border/40 bg-card/10 px-8 py-4 text-base font-semibold text-white backdrop-blur-sm transition-all hover:bg-card/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
-                >
-                  My jobs
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/jobs"
-                  className="inline-flex items-center justify-center rounded-2xl bg-card px-8 py-4 text-base font-semibold text-link shadow-xl shadow-foreground/15 transition-all hover:bg-accent-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
-                >
-                  Browse jobs
-                  <ArrowRight className="ml-2 h-5 w-5" aria-hidden />
-                </Link>
-                <Link
-                  href="/applications"
-                  className="inline-flex items-center justify-center rounded-2xl border-2 border-border/40 bg-card/10 px-8 py-4 text-base font-semibold text-white backdrop-blur-sm transition-all hover:bg-card/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
-                >
-                  My applications
-                </Link>
-              </>
-            )}
+            <Link
+              href="/register"
+              className="inline-flex items-center justify-center rounded-2xl bg-card px-8 py-4 text-base font-semibold text-link shadow-xl shadow-foreground/15 transition-all hover:bg-accent-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
+            >
+              Get started
+              <ArrowRight className="ml-2 h-5 w-5" aria-hidden />
+            </Link>
+            <Link
+              href="/jobs"
+              className="inline-flex items-center justify-center rounded-2xl border-2 border-border/40 bg-card/10 px-8 py-4 text-base font-semibold text-white backdrop-blur-sm transition-all hover:bg-card/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0259cc]"
+            >
+              Browse jobs
+            </Link>
           </div>
         </div>
       </div>
@@ -301,11 +253,8 @@ export default function HomePage() {
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    href={user ? "/profile" : "/register"}
-                    className="transition-colors hover:text-white"
-                  >
-                    {user ? "Your profile" : "Create Profile"}
+                  <Link href="/register" className="transition-colors hover:text-white">
+                    Create Profile
                   </Link>
                 </li>
                 <li>
@@ -327,11 +276,8 @@ export default function HomePage() {
                   </Link>
                 </li>
                 <li>
-                  <Link
-                    href={user?.role === "employer" ? "/my-jobs" : "/register"}
-                    className="transition-colors hover:text-white"
-                  >
-                    {user?.role === "employer" ? "My jobs" : "Create Account"}
+                  <Link href="/register" className="transition-colors hover:text-white">
+                    Create Account
                   </Link>
                 </li>
                 <li>

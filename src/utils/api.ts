@@ -122,8 +122,7 @@ class ApiClient {
 
   private handleAuthExpired() {
     if (typeof window === "undefined") return;
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    removeAuthToken();
     window.dispatchEvent(new CustomEvent("auth:unauthorized"));
     const current = `${window.location.pathname}${window.location.search}`;
     const redirect =
@@ -896,13 +895,29 @@ class ApiClient {
 
 export const apiClient = new ApiClient();
 
+/**
+ * Components like AppSidebar read auth state once via `getUser()` on mount and
+ * hold it in local state — they have no way to know when a *different* part of
+ * the app (login page, axios's silent token refresh, another tab) changes
+ * localStorage afterward. Every mutator below fires this so any mounted listener
+ * can resync immediately instead of showing stale "signed out" UI indefinitely.
+ */
+export const AUTH_CHANGED_EVENT = "auth:changed";
+
+function notifyAuthChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
+}
+
 // Helper functions
 export const setAuthToken = (token: string) => {
   if (!token || token === "undefined") {
     localStorage.removeItem("token");
+    notifyAuthChanged();
     return;
   }
   localStorage.setItem("token", token);
+  notifyAuthChanged();
 };
 
 export const getAuthToken = () => {
@@ -912,6 +927,7 @@ export const getAuthToken = () => {
 export const removeAuthToken = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
+  notifyAuthChanged();
 };
 
 export const setUser = (user: User) => {
@@ -924,6 +940,8 @@ export const setUser = (user: User) => {
     localStorage.setItem("user", s);
   } catch {
     localStorage.removeItem("user");
+  } finally {
+    notifyAuthChanged();
   }
 };
 
@@ -954,4 +972,5 @@ export const getUser = (): User | null => {
 
 export const removeUser = () => {
   localStorage.removeItem("user");
+  notifyAuthChanged();
 };

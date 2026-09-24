@@ -92,15 +92,15 @@ function PaymentsInner() {
               Payments (BDT)
             </h1>
             <p className="text-sm text-fg-muted">
-              Top up via SSLCOMMERZ (cards, mobile banking, and more). Sandbox test cards are
-              listed in the{" "}
+              Top up securely via SSLCOMMERZ using cards, mobile banking, and
+              other supported payment methods. See the{" "}
               <a
                 href="https://developer.sslcommerz.com/doc/v4/"
                 className="font-medium text-accent hover:underline"
                 target="_blank"
                 rel="noreferrer"
               >
-                SSLCOMMERZ developer docs
+                for sandbox test cards
               </a>
               .
             </p>
@@ -109,15 +109,12 @@ function PaymentsInner() {
 
         <div className="mb-8 rounded-3xl border border-border/70 bg-card/80 p-6 shadow-xl shadow-foreground/5 ring-1 ring-foreground/5 backdrop-blur-md">
           <h2 className="text-lg font-bold text-foreground">Start a payment</h2>
-          <p className="mt-1 text-sm text-fg-muted">
-            Configure <code className="rounded-md bg-card-muted/90 px-1.5 py-0.5 text-xs">SSLCOMMERZ_*</code> and{" "}
-            <code className="rounded-md bg-card-muted/90 px-1.5 py-0.5 text-xs">API_PUBLIC_BASE_URL</code> on the API
-            server. Callbacks must reach your backend (use a public URL or tunnel for IPN in
-            development).
-          </p>
+
           <div className="mt-4 flex flex-wrap items-end gap-3">
             <label className="block">
-              <span className="text-sm font-medium text-fg-muted">Amount (BDT)</span>
+              <span className="text-sm font-medium text-fg-muted">
+                Amount (BDT)
+              </span>
               <input
                 type="number"
                 min={10}
@@ -146,7 +143,9 @@ function PaymentsInner() {
           </div>
         </div>
 
-        <h2 className="mb-3 text-lg font-bold text-foreground">Recent activity</h2>
+        <h2 className="mb-3 text-lg font-bold text-foreground">
+          Recent activity
+        </h2>
         {loading ? (
           <div className="text-fg-subtle">Loading…</div>
         ) : payments.length === 0 ? (
@@ -188,7 +187,10 @@ function PaymentsInner() {
         )}
 
         <p className="mt-8 text-center text-sm text-fg-subtle">
-          <Link href="/my-jobs" className="font-medium text-accent hover:underline">
+          <Link
+            href="/my-jobs"
+            className="font-medium text-accent hover:underline"
+          >
             Back to My Jobs
           </Link>
         </p>
