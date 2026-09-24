@@ -6,6 +6,8 @@ import {
   ChatConversationDetail,
   ChatConversationSummary,
   ChatMessage,
+  Company,
+  CompanyDetail,
   DataDeletionRequest,
   ExternalJobPosting,
   ExternalJobSource,
@@ -595,6 +597,22 @@ class ApiClient {
     }
   }
 
+  async initJobBoostPayment(
+    jobId: string,
+    boostDays: number,
+  ): Promise<ApiResponse<SslCommerzInitData>> {
+    try {
+      const response = await this.client.post("/payments/sslcommerz/init", {
+        purpose: "job_boost",
+        jobId,
+        boostDays,
+      });
+      return this.normalizeResponse<SslCommerzInitData>(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
   async getMyPayments(): Promise<ApiResponse<Payment[]>> {
     try {
       const response = await this.client.get("/payments/me");
@@ -811,6 +829,65 @@ class ApiClient {
     try {
       const response = await this.client.put(`/chat/message/${messageId}`, { newMessage });
       return this.normalizeResponse(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  // Company endpoints
+  async createCompany(data: {
+    name: string;
+    description: string;
+    industry: string;
+    size?: string;
+    website?: string;
+    location?: string;
+    logoUrl?: string;
+  }): Promise<ApiResponse<Company>> {
+    try {
+      const response = await this.client.post("/companies", data);
+      return this.normalizeResponse<Company>(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  async getCompany(idOrSlug: string): Promise<ApiResponse<CompanyDetail>> {
+    try {
+      const response = await this.client.get(`/companies/${idOrSlug}`);
+      return this.normalizeResponse<CompanyDetail>(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  async getMyCompany(): Promise<ApiResponse<Company>> {
+    try {
+      const response = await this.client.get("/companies/mine");
+      return this.normalizeResponse<Company>(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  async updateCompany(
+    companyId: string,
+    data: Partial<
+      Pick<Company, "description" | "industry" | "size" | "website" | "location" | "logoUrl">
+    >,
+  ): Promise<ApiResponse<Company>> {
+    try {
+      const response = await this.client.patch(`/companies/${companyId}`, data);
+      return this.normalizeResponse<Company>(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  async addCompanyMember(companyId: string, email: string): Promise<ApiResponse<Company>> {
+    try {
+      const response = await this.client.post(`/companies/${companyId}/members`, { email });
+      return this.normalizeResponse<Company>(response.data);
     } catch (error) {
       return { success: false, message: this.extractErrorMessage(error) };
     }

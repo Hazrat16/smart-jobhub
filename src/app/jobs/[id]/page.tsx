@@ -2,7 +2,7 @@
 
 import { Job } from "@/types";
 import { apiClient, getUser } from "@/utils/api";
-import { Building2, DollarSign, MapPin } from "lucide-react";
+import { Building2, DollarSign, MapPin, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -48,7 +48,13 @@ export default function JobDetailsPage() {
             <div className="flex flex-wrap gap-4 text-fg-muted">
               <span className="inline-flex items-center gap-1">
                 <Building2 className="h-4 w-4" />
-                {job.company}
+                {job.companyId ? (
+                  <Link href={`/companies/${job.companyId}`} className="hover:underline">
+                    {job.company}
+                  </Link>
+                ) : (
+                  job.company
+                )}
               </span>
               <span className="inline-flex items-center gap-1">
                 <MapPin className="h-4 w-4" />
@@ -122,12 +128,23 @@ export default function JobDetailsPage() {
               Back to Jobs
             </Link>
             {currentUser?.role === "jobseeker" && (
-              <Link
-                href={`/jobs/${job._id}/apply`}
-                className="rounded-md bg-gradient-to-r from-accent to-accent-end px-5 py-2 text-white transition-all hover:brightness-110"
-              >
-                Apply Now
-              </Link>
+              <>
+                <Link
+                  href={`/jobs/${job._id}/apply`}
+                  className="rounded-md bg-gradient-to-r from-accent to-accent-end px-5 py-2 text-white transition-all hover:brightness-110"
+                >
+                  Apply Now
+                </Link>
+                <Link
+                  href={`/messages/${job.employer._id}?name=${encodeURIComponent(
+                    job.employer.name || job.company,
+                  )}&photo=${encodeURIComponent(job.employer.photo || "")}`}
+                  className="inline-flex items-center gap-2 rounded-md border border-border-strong px-5 py-2 text-fg-muted hover:bg-card-muted"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Message Employer
+                </Link>
+              </>
             )}
           </div>
         </div>

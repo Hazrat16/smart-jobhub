@@ -85,6 +85,10 @@ export interface Job {
   /** Set on employer “my jobs” list from the server. */
   applicationCount?: number;
   status: "active" | "closed" | "draft";
+  companyId?: string;
+  featuredUntil?: string;
+  /** Present on list responses only — computed server-side for sorting. */
+  isFeatured?: number;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -388,4 +392,45 @@ export interface LiveChatMessage {
   message: string;
   messageType: ChatMessage["messageType"];
   timestamp: string;
+}
+
+export const COMPANY_SIZES = [
+  "1-10",
+  "11-50",
+  "51-200",
+  "201-500",
+  "501-1000",
+  "1000+",
+] as const;
+export type CompanySize = (typeof COMPANY_SIZES)[number];
+
+export interface Company {
+  _id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string;
+  description: string;
+  industry: string;
+  size?: CompanySize;
+  website?: string;
+  location?: string;
+  verified: boolean;
+  createdBy: string;
+  members: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyJobSummary {
+  _id: string;
+  title: string;
+  location: string;
+  type: Job["type"];
+  salary: Job["salary"];
+  createdAt: string;
+}
+
+export interface CompanyDetail {
+  company: Company;
+  jobs: CompanyJobSummary[];
 }

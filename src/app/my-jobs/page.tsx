@@ -3,11 +3,18 @@
 import { Job } from "@/types";
 import { apiClient, getAuthToken, getUser } from "@/utils/api";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
-import { Briefcase, Loader2, MapPin, Plus } from "lucide-react";
+import { Briefcase, Loader2, MapPin, Plus, Rocket, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+
+const BOOST_PRICE_PER_DAY_BDT = 100;
+const BOOST_DAY_OPTIONS = [3, 7, 14, 30];
+
+function isJobFeatured(job: Job): boolean {
+  return Boolean(job.featuredUntil && new Date(job.featuredUntil) > new Date());
+}
 
 export default function MyJobsPage() {
   const router = useRouter();
@@ -15,6 +22,9 @@ export default function MyJobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [boostPanelJobId, setBoostPanelJobId] = useState<string | null>(null);
+  const [boostDays, setBoostDays] = useState(7);
+  const [boosting, setBoosting] = useState(false);
 
   useEffect(() => {
     if (!ready) {
@@ -48,6 +58,20 @@ export default function MyJobsPage() {
       toast.success("Job status updated");
     } finally {
       setStatusBusyId(null);
+    }
+  };
+
+  const onBoost = async (jobId: string) => {
+    setBoosting(true);
+    try {
+      const res = await apiClient.initJobBoostPayment(jobId, boostDays);
+      if (!res.success || !res.data) {
+        toast.error(res.message || "Could not start payment");
+        return;
+      }
+      window.location.href = res.data.gatewayUrl;
+    } finally {
+      setBoosting(false);
     }
   };
 
@@ -94,16 +118,22 @@ export default function MyJobsPage() {
             {jobs.map((job) => (
               <li
                 key={job._id}
-                className="bg-card rounded-lg shadow border border-border p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                className="bg-card rounded-lg shadow border border-border p-5 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3"
               >
                 <div>
-                  <h2 className="text-lg font-semibold text-foreground">
+                  <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold text-foreground">
                     <Link
                       href={`/jobs/${job._id}`}
                       className="hover:text-accent"
                     >
                       {job.title}
                     </Link>
+                    {isJobFeatured(job) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">
+                        <Sparkles className="h-3 w-3" />
+                        Featured
+                      </span>
+                    )}
                   </h2>
                   <p className="text-fg-muted text-sm">{job.company}</p>
                   <p className="text-fg-subtle text-sm flex items-center gap-1 mt-1">
@@ -149,7 +179,49 @@ export default function MyJobsPage() {
                   >
                     Public listing
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBoostPanelJobId((prev) => (prev === job._id ? null : job._id))
+                    }
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 hover:underline dark:text-amber-400"
+                  >
+                    <Rocket className="h-3.5 w-3.5" />
+                    {isJobFeatured(job) ? "Extend boost" : "Boost"}
+                  </button>
                 </div>
+
+                {boostPanelJobId === job._id && (
+                  <div className="w-full basis-full rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/40 dark:bg-amber-950/20">
+                    <p className="mb-2 text-sm font-medium text-foreground">
+                      Pin &ldquo;{job.title}&rdquo; to the top of search results
+                    </p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <select
+                        value={boostDays}
+                        onChange={(e) => setBoostDays(Number(e.target.value))}
+                        className="rounded-md border border-border bg-card px-2.5 py-1.5 text-sm text-foreground focus:border-accent focus:outline-none"
+                      >
+                        {BOOST_DAY_OPTIONS.map((d) => (
+                          <option key={d} value={d}>
+                            {d} days — {d * BOOST_PRICE_PER_DAY_BDT} BDT
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={boosting}
+                        onClick={() => void onBoost(job._id)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700 disabled:opacity-60"
+                      >
+                        {boosting ? "Redirecting…" : "Pay & boost"}
+                      </button>
+                      <span className="text-xs text-fg-subtle">
+                        Redirects to SSLCommerz to complete payment.
+                      </span>
+                    </div>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

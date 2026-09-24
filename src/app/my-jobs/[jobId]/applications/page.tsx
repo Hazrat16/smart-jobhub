@@ -8,6 +8,7 @@ import {
   FileText,
   Loader2,
   Mail,
+  MessageCircle,
   User,
 } from "lucide-react";
 import Link from "next/link";
@@ -233,6 +234,17 @@ export default function JobApplicationsPage() {
                             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                           </a>
                         ) : null}
+                        {app.applicant?._id && (
+                          <Link
+                            href={`/messages/${app.applicant._id}?name=${encodeURIComponent(
+                              app.applicant.name || "Applicant",
+                            )}&photo=${encodeURIComponent(app.applicant.photo || "")}`}
+                            className="inline-flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 py-2 text-sm font-medium text-foreground hover:bg-card-muted"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                            Message
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>

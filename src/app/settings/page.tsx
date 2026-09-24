@@ -4,6 +4,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { getUser } from "@/utils/api";
 import {
   Bell,
+  Building2,
   FileLock2,
   Gavel,
   Settings2,
@@ -45,6 +46,13 @@ const SETTINGS_LINKS: SettingsLink[] = [
     title: "Terms of service",
     description: "Platform usage terms and moderation policy.",
     icon: Gavel,
+  },
+  {
+    href: "/company",
+    title: "Company profile",
+    description: "Create or manage your company page and team members.",
+    icon: Building2,
+    roles: ["employer"],
   },
   {
     href: "/payments",
