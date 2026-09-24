@@ -338,3 +338,54 @@ export interface RemoteJobListing {
   publishedAt?: string;
   salary?: string;
 }
+
+export interface ChatUserRef {
+  _id?: string;
+  id?: string;
+  name?: string;
+  photo?: string;
+  email?: string;
+}
+
+export interface ChatMessage {
+  _id: string;
+  senderId: ChatUserRef | string;
+  receiverId: ChatUserRef | string;
+  message: string;
+  messageType: "text" | "image" | "file" | "audio" | "video";
+  timestamp: string;
+  isRead: boolean;
+  isEdited?: boolean;
+  isDeleted?: boolean;
+  attachments?: string[];
+}
+
+export interface ChatConversationSummary {
+  id: string;
+  otherParticipant: ChatUserRef;
+  lastMessage?: { message?: string; timestamp?: string } | null;
+  lastMessageAt?: string;
+  unreadCount: number;
+  isGroupChat: boolean;
+}
+
+export interface ChatConversationDetail {
+  conversation: {
+    id: string;
+    participants: string[];
+    lastMessageAt?: string;
+    unreadCount: number;
+  };
+  messages: ChatMessage[];
+}
+
+/** Live event payload pushed over the socket when a new message arrives (see
+ * WebSocketService.handleSendMessage on the backend). */
+export interface LiveChatMessage {
+  clientMessageId: string;
+  senderId: string;
+  receiverId: string;
+  message: string;
+  messageType: ChatMessage["messageType"];
+  timestamp: string;
+}

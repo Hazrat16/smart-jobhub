@@ -15,6 +15,7 @@ import {
   LayoutDashboard,
   LineChart,
   LogOut,
+  MessageCircle,
   Settings2,
   Shield,
   SunMoon,
@@ -130,6 +131,7 @@ export default function AppSidebar() {
 
   const secondaryItems = useMemo<SidebarItem[]>(() => {
     const base: SidebarItem[] = [
+      { href: "/messages", label: "Messages", icon: MessageCircle },
       { href: "/notifications", label: "Notifications", icon: Bell },
       { href: "/settings", label: "Settings", icon: Settings2 },
     ];

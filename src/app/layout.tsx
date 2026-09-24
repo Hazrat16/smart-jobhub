@@ -4,6 +4,7 @@ import MonitoringBootstrap from "@/components/MonitoringBootstrap";
 import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme";
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
+import { Suspense } from "react";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 
@@ -45,7 +46,9 @@ export default function RootLayout({
       <body
         className={`${plusJakarta.className} min-h-screen bg-background text-foreground antialiased`}
       >
-        <MonitoringBootstrap />
+        <Suspense fallback={null}>
+          <MonitoringBootstrap />
+        </Suspense>
         <Navbar />
         <div className="flex min-h-[calc(100vh-4rem)]">
           <AppSidebar />

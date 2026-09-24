@@ -3,6 +3,9 @@ import {
   ActivitySummary,
   ApiResponse,
   AuthResponse,
+  ChatConversationDetail,
+  ChatConversationSummary,
+  ChatMessage,
   DataDeletionRequest,
   ExternalJobPosting,
   ExternalJobSource,
@@ -766,6 +769,48 @@ class ApiClient {
     try {
       const response = await this.client.get("/remote-jobs", { params });
       return this.normalizeResponse<RemoteJobListing[]>(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  // Chat endpoints — history/search are REST; sending/typing/presence are socket-based
+  // (see @/lib/socket). Responses use a raw {conversations:[...]} / {error:"..."} shape
+  // rather than the app-wide {success,data} envelope; normalizeResponse absorbs both.
+  async getConversations(): Promise<ApiResponse<{ conversations: ChatConversationSummary[] }>> {
+    try {
+      const response = await this.client.get("/chat/conversations");
+      return this.normalizeResponse(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  async getConversationWithUser(userId: string): Promise<ApiResponse<ChatConversationDetail>> {
+    try {
+      const response = await this.client.get(`/chat/conversation/${userId}`);
+      return this.normalizeResponse<ChatConversationDetail>(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  async deleteChatMessage(messageId: string): Promise<ApiResponse> {
+    try {
+      const response = await this.client.delete(`/chat/message/${messageId}`);
+      return this.normalizeResponse(response.data);
+    } catch (error) {
+      return { success: false, message: this.extractErrorMessage(error) };
+    }
+  }
+
+  async editChatMessage(
+    messageId: string,
+    newMessage: string,
+  ): Promise<ApiResponse<{ editedMessage: ChatMessage }>> {
+    try {
+      const response = await this.client.put(`/chat/message/${messageId}`, { newMessage });
+      return this.normalizeResponse(response.data);
     } catch (error) {
       return { success: false, message: this.extractErrorMessage(error) };
     }
