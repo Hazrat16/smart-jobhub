@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Semantic tokens — parity with SmartCrowd web palette:
+ * `client/apps/web/src/app/styles/palette/smartcrowd.css`
+ * Light: [data-platform='SmartCrowd']  |  Dark: [data-platform='SmartCrowd'].dark
+ * Use utilities (bg-background, text-fg-muted, border-border, text-accent, …).
+ */
+:root {
+  /* Surfaces — SC container-* */
+  --background: #ffffff;
+  --foreground: #000000;
+  --fg-muted: #616161;
+  --fg-subtle: #7a7a7a;
+  --card: #ffffff;
+  --card-muted: #f8f8f8;
+  --popover: #ffffff;
+  --border: #d3d3d3;
+  --border-strong: #2d4975;
+  --input: #ffffff;
+  --input-border: #d3d3d3;
+  /* Action / focus — SC #197bfd family */
+  --ring: rgba(25, 123, 253, 0.35);
+  --accent: #197bfd;
+  --accent-hover: #0268f0;
+  --accent-end: #4795fd;
+  --accent-muted: rgba(25, 123, 253, 0.1);
+  --accent-muted-strong: rgba(25, 123, 253, 0.18);
+  --link: #197bfd;
+  --link-soft: #82a0ce;
+  /* SC status-error */
+  --destructive: #f14437;
+  --destructive-muted: rgba(241, 68, 55, 0.1);
+  --success: #12b76a;
+  --warning: #f79008;
+  /* Brand title / deep navy — SC text-title light */
+  --logo-muted: #012a61;
+  /* Footer strip — SC container-secondary */
+  --footer: #012a61;
+  --footer-muted: rgba(248, 250, 252, 0.72);
+  --footer-border: rgba(255, 255, 255, 0.14);
+  --skeleton: #ededed;
+  --grid-line: rgba(0, 0, 0, 0.05);
+  /* SC hold-500 — teal accent for gradients */
+  --hold: #00c9b8;
+  --scrollbar-thumb: #ededed;
+  --scrollbar-track: transparent;
+}
+
+.dark {
+  --background: #0e1724;
+  --foreground: #ffffff;
+  --fg-muted: #82a0ce;
+  --fg-subtle: #d3d3d3;
+  --card: #152236;
+  --card-muted: #1a273c;
+  --popover: #152236;
+  --border: #2d4975;
+  --border-strong: #7a7a7a;
+  --input: #1a273c;
+  --input-border: #2d4975;
+  --ring: rgba(25, 123, 253, 0.45);
+  --accent: #197bfd;
+  --accent-hover: #0268f0;
+  --accent-end: #4795fd;
+  --accent-muted: rgba(25, 123, 253, 0.1);
+  --accent-muted-strong: rgba(25, 123, 253, 0.22);
+  --link: #197bfd;
+  --link-soft: #82a0ce;
+  --destructive: #f14437;
+  --destructive-muted: rgba(241, 68, 55, 0.12);
+  --success: #12b76a;
+  --warning: #f79008;
+  --logo-muted: #ffffff;
+  --footer: #012a61;
+  --footer-muted: #82a0ce;
+  --footer-border: #213655;
+  --skeleton: #213655;
+  --grid-line: rgba(255, 255, 255, 0.06);
+  --hold: #00c9b8;
+  --scrollbar-thumb: #213655;
+  --scrollbar-track: #152236;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-card: var(--card);
+  --color-card-muted: var(--card-muted);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-input-border: var(--input-border);
+  --color-ring: var(--ring);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-end: var(--accent-end);
+  --color-accent-muted: var(--accent-muted);
+  --color-accent-muted-strong: var(--accent-muted-strong);
+  --color-link: var(--link);
+  --color-link-soft: var(--link-soft);
+  --color-destructive: var(--destructive);
+  --color-destructive-muted: var(--destructive-muted);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-logo-muted: var(--logo-muted);
+  --color-popover: var(--popover);
+  --color-footer: var(--footer);
+  --color-footer-muted: var(--footer-muted);
+  --color-footer-border: var(--footer-border);
+  --color-skeleton: var(--skeleton);
+  --color-grid-line: var(--grid-line);
+  --color-hold: var(--hold);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  min-height: 100vh;
+  background-color: var(--background);
+  color: var(--foreground);
+}
+
+::selection {
+  background-color: var(--accent-muted-strong);
+  color: var(--foreground);
+}
+
+/* Form controls — SC debit-input */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+    [type="color"]
+  ),
+textarea,
+select,
+option {
+  color: var(--foreground) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--fg-subtle) !important;
+}
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--foreground) !important;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
