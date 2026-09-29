@@ -15,8 +15,8 @@ RUN apk add --no-cache \
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (including dev dependencies for build)
-RUN npm install
+# Install all dependencies from the lockfile (including dev dependencies for build)
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -43,7 +43,7 @@ EXPOSE 5000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5000/api/test || exit 1
+    CMD curl -f http://localhost:5000/api/health/ready || exit 1
 
 # Start the application from the compiled build (tsx is a dev-only dependency,
 # pruned above, so the runtime entrypoint must be plain compiled JS).

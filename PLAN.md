@@ -63,24 +63,46 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 
 ## Known issues to fix (found during review)
 
-- [ ] Rename the default branch `master` → `main`.
-- [ ] Old per-repo workflow `apps/api/.github/workflows/ci.yml` is inert inside the monorepo. Move it to
+- [x] Rename the default branch `master` → `main`. (Already `main` locally and on `origin`.)
+- [x] Old per-repo workflow `apps/api/.github/workflows/ci.yml` is inert inside the monorepo. Move it to
       root `.github/workflows/api.yml` with path filters.
-- [ ] The old `quality-gate.yml` (in `Code/Node/job-platform-project/.github/`) called
+- [x] The old `quality-gate.yml` (in `Code/Node/job-platform-project/.github/`) called
       `npm run test:integration`, which doesn't exist, and used `MONGO_URI` where the API tests expect
       `TEST_MONGODB_URI`. Reconcile when writing the new workflows.
-- [ ] `apps/web` has no CI yet.
-- [ ] `apps/api/Dockerfile`: use `npm ci` instead of `npm install`, and point the healthcheck at
+      (Done: `npm test` + `TEST_MONGODB_URI`; no Redis service, since the test harness unsets `REDIS_URL`.)
+- [x] `apps/web` has no CI yet. (`.github/workflows/web.yml`)
+- [x] `apps/api/Dockerfile`: use `npm ci` instead of `npm install`, and point the healthcheck at
       `/api/health/ready` instead of `/api/test`.
-- [ ] `apps/api/docker-compose.yml` maps port 3000, but the app listens on 5000.
-- [ ] `apps/web/next.config.ts`: remove `productionBrowserSourceMaps: true` (it exposes the source
+      (The issue was actually in `Dockerfile.chat` and the `docker-compose.chat*.yml` healthchecks;
+      `Dockerfile` already used `npm ci`.)
+- [x] `apps/api/docker-compose.yml` maps port 3000, but the app listens on 5000.
+- [x] `apps/web/next.config.ts`: remove `productionBrowserSourceMaps: true` (it exposes the source
       publicly; upload source maps to Sentry instead). Add `output: "standalone"` for the Docker image.
       Keep the `/api` rewrite for local dev only.
-- [ ] `apps/web` needs a multi-stage, non-root Dockerfile.
+- [ ] `apps/web` needs a multi-stage, non-root Dockerfile. (Deferred to Phase 2.)
+
+- [x] API tests could not run in CI: `src/utils/email.ts` builds the Resend client at import time and throws
+      without `RESEND_API_KEY`, and the payment tests got 503 without SSLCommerz credentials. The failed
+      teardown then left Mongo open, so the run hung. Fixed in `tests/helpers/testApp.ts` (dummy key +
+      `SSLCOMMERZ_ALLOW_TESTBOX`). Longer term, email.ts should create the client lazily.
+- [x] `npm audit --audit-level=high` failed on web (postcss nested in next). Fixed with an npm `overrides`
+      entry (`postcss ^8.5.23`) instead of the breaking `next@16` upgrade. Remove it once Next ships a fixed postcss.
+
+### Phase 1 notes
+
+- Path filtering is done inside each workflow (`dorny/paths-filter`) rather than `on.paths`, so the
+  required checks `api-ci` and `web-ci` always report and never leave unrelated PRs stuck on "pending".
+- Docker build + Trivy in PR CI are deferred to Phase 2, once the production Dockerfiles exist.
+- Branch protection (owner, once the workflows have run on GitHub at least once):
+  `gh api -X PUT repos/Hazrat16/smart-jobhub/branches/main/protection --input -` with
+  `{"required_status_checks":{"strict":true,"contexts":["api-ci","web-ci","analyze"]},
+  "enforce_admins":false,"required_pull_request_reviews":{"required_approving_review_count":0},
+  "restrictions":null,"allow_force_pushes":false,"allow_deletions":false}`
 
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
+       (Workflows and fixes done; waiting on push + branch protection.)
 2. [ ] **Production Dockerfiles** for api and web; both build and run locally.
 3. [ ] **Infra bootstrap** (manual, documented in `infra/BOOTSTRAP.md`): state bucket, OIDC provider, ECR.
 4. [ ] **Staging infra:** network, ALB, ACM, Route 53, ECS services.

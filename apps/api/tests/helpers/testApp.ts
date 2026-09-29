@@ -12,6 +12,10 @@ import { closeRedis } from "../../src/config/redis.js";
 process.env["NODE_ENV"] = "test";
 process.env["JWT_SECRET"] ||= "test-only-jwt-secret-do-not-use-in-prod";
 process.env["ADMIN_BOOTSTRAP_SECRET"] ||= "test-only-bootstrap-secret";
+// utils/email.ts constructs the Resend client at import time, which throws without a key.
+process.env["RESEND_API_KEY"] ||= "re_test_only_dummy_key";
+// Public SSLCommerz sandbox pair; the payment tests only exercise validation paths.
+process.env["SSLCOMMERZ_ALLOW_TESTBOX"] ||= "true";
 process.env["MONGODB_URI"] ||=
   process.env["TEST_MONGODB_URI"] || "mongodb://127.0.0.1:27099/job-platform-test";
 
