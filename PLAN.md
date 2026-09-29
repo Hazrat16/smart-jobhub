@@ -95,7 +95,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - Docker build + Trivy in PR CI: added in Phase 2 (`image` job in each workflow).
 - Branch protection (owner, once the workflows have run on GitHub at least once):
   `gh api -X PUT repos/Hazrat16/smart-jobhub/branches/main/protection --input -` with
-  `{"required_status_checks":{"strict":true,"contexts":["api-ci","web-ci","analyze"]},
+  `{"required_status_checks":{"strict":true,"contexts":["api-ci","web-ci","infra-ci","analyze"]},
   "enforce_admins":false,"required_pull_request_reviews":{"required_approving_review_count":0},
   "restrictions":null,"allow_force_pushes":false,"allow_deletions":false}`
 
@@ -120,12 +120,29 @@ README.md                 live demo, badges, diagram, "production readiness" sec
   `amqp://localhost`), but this plan has no RabbitMQ in AWS. Without it the API is healthy but chat
   messaging is offline. Decide: Amazon MQ, CloudAMQP, or move chat queuing onto Redis/BullMQ.
 
+### Phase 3 notes
+
+- `infra/bootstrap` (local state first, then migrated to S3) creates the state bucket, the GitHub OIDC
+  provider, both ECR repos (via `modules/ecr`), a workload permissions boundary, and two CI roles (via
+  `modules/github-oidc`). Provider lock file is committed with linux/darwin hashes.
+- **Addition to the three-role decision:** a read-only `infra-planner` role for `terraform plan` on PRs.
+  A PR can edit the workflow it runs, so PRs must never assume `infra-deployer`. The three deploy roles
+  are unchanged; `api-deployer` / `web-deployer` get created in step 6.
+- `job_workflow_ref` scoping uses GitHub's OIDC subject customisation (`repo`, `context`,
+  `job_workflow_ref`). The module rejects any subject without `job_workflow_ref`.
+- `infra-deployer` = PowerUserAccess + IAM only under `/job-platform/`, and new roles must carry the
+  workload boundary (which denies IAM writes, Organizations and account changes, and state-bucket access).
+  CI roles live under `/job-platform-ci/` so the pipeline can't edit its own role.
+- `infra.yml` currently runs fmt / validate / tflint / checkov (no AWS access). `plan` / `apply` get added
+  with the staging stack in step 4.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
        (Workflows and fixes done; waiting on push + branch protection.)
 2. [x] **Production Dockerfiles** for api and web; both build and run locally.
 3. [ ] **Infra bootstrap** (manual, documented in `infra/BOOTSTRAP.md`): state bucket, OIDC provider, ECR.
+       (Code done and passes fmt/validate/tflint/checkov; waiting on the owner to run BOOTSTRAP.md.)
 4. [ ] **Staging infra:** network, ALB, ACM, Route 53, ECS services.
 5. [ ] **Data and secrets:** Atlas cluster, Redis, Secrets Manager values populated.
 6. [ ] **CD workflows:** merge to `main` deploys to staging automatically.

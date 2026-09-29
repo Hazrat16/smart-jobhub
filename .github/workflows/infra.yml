@@ -1,0 +1,94 @@
+name: infra
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: infra-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TERRAFORM_VERSION: 1.16.4
+  TFLINT_VERSION: v0.64.0
+  CHECKOV_VERSION: 3.3.20
+
+jobs:
+  # Path filtering happens here instead of in `on.paths`, so the required
+  # `infra-ci` check always reports a result and never blocks unrelated PRs.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+              - '.github/workflows/infra.yml'
+
+  # Static checks only; needs no AWS access. `plan` on PRs (infra-planner role)
+  # and `apply` on main (infra-deployer role) are added with the env stacks.
+  static:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: terraform fmt
+        run: terraform fmt -recursive -check -diff
+
+      - name: terraform validate (every root stack)
+        run: |
+          for dir in bootstrap envs/*/; do
+            [ -d "$dir" ] || continue
+            echo "::group::$dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate
+            echo "::endgroup::"
+          done
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: tflint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init
+          tflint --recursive --format compact
+
+      - name: checkov
+        run: |
+          pipx run "checkov==${CHECKOV_VERSION}" -d . --framework terraform --compact --quiet
+
+  # Single required status check for branch protection.
+  infra-ci:
+    needs: [changes, static]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - run: echo "infra CI passed or was not needed"

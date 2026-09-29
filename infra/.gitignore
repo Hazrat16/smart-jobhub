@@ -1,0 +1,10 @@
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+# bootstrap/backend.tf is created from backend.tf.example after the first apply (see BOOTSTRAP.md)
