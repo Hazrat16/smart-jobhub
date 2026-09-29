@@ -211,6 +211,25 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - `apps/api/deploy/task-def.json` isn't used (see Phase 4 notes); the deploy action derives the new
   revision from the family's latest one.
 
+### Phase 7 notes
+
+- **Infra flow (industry standard, approved):** PR → plan staging + prod. Merge → staging applies
+  automatically (the reviewed PR is the approval) → `plan-prod` saves a plan to `s3://<state>/plans/prod/`
+  → `apply-prod` waits on the `production` environment and applies **that file** after checking its
+  SHA-256. Terraform refuses it if prod state changed in between. No prod changes means no approval.
+- `modules/environment` is the one composition. `envs/staging` and `envs/prod` only set values, so
+  the two can't drift. `moved` blocks keep an already-applied staging in place.
+- `ecs-service` autoscaling: an Application Auto Scaling target is always registered (so changing
+  `min_count` resizes even fixed-size services), and there's a CPU target-tracking policy (60%) when
+  `max > min`. The service ignores `desired_count`.
+- Prod defaults: on-demand Fargate, api 1–3 and web 1–2 tasks, ALB deletion protection, 30-day logs,
+  live SSLCommerz. `api_min_count = 2` / `web_min_count = 2` for no-downtime AZ or task loss (+~$13/month
+  each). Prod ≈ $65/month + Atlas Flex.
+- The circuit breaker with rollback has been on every service since step 4. The deploy action fails the
+  run if ECS rolls back.
+- The planner now also trusts `ref:refs/heads/main` for infra.yml (the prod plan after merge) and may
+  write `plans/*`; saved plans expire after 7 days. **Re-apply the bootstrap.**
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
@@ -226,6 +245,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
        (Workflows done and tested locally; need the bootstrap re-applied for the deployer roles, repo/env
        variables, and a first run.)
 7. [ ] **Prod:** approval gate, autoscaling, circuit breaker.
+       (Code done and tested with mocks; waiting on bootstrap re-apply, prod domain, and first approval.)
 8. [ ] **Operations:** CloudWatch alarms → SNS, AWS Budgets alert, Sentry releases, `docs/runbook.md`,
        an Atlas restore test.
 9. [ ] **CV polish:** README diagram, badges, live demo and demo login, ADRs.

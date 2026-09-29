@@ -15,7 +15,7 @@ terraform {
   # The bucket name includes the account ID, so it is passed at init time:
   #   terraform init -backend-config="bucket=<TF_STATE_BUCKET>"
   backend "s3" {
-    key          = "envs/staging/terraform.tfstate"
+    key          = "envs/prod/terraform.tfstate"
     region       = "ap-south-1"
     encrypt      = true
     use_lockfile = true
@@ -28,9 +28,9 @@ provider "aws" {
   default_tags {
     tags = {
       Project     = "job-platform"
-      Environment = "staging"
+      Environment = "prod"
       ManagedBy   = "terraform"
-      Stack       = "envs/staging"
+      Stack       = "envs/prod"
     }
   }
 }

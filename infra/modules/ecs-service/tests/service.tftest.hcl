@@ -82,6 +82,44 @@ run "with_secrets" {
   }
 }
 
+run "autoscaling" {
+  command = apply
+
+  variables {
+    min_count = 1
+    max_count = 3
+  }
+
+  assert {
+    condition     = aws_appautoscaling_target.this.min_capacity == 1 && aws_appautoscaling_target.this.max_capacity == 3
+    error_message = "Scalable target must use min_count..max_count."
+  }
+
+  assert {
+    condition     = aws_appautoscaling_target.this.resource_id == "service/job-platform-staging/job-platform-staging-api"
+    error_message = "Scalable target must point at this service in this cluster."
+  }
+
+  assert {
+    condition     = length(aws_appautoscaling_policy.cpu) == 1
+    error_message = "max > min needs a CPU scaling policy."
+  }
+}
+
+run "fixed_size" {
+  command = apply
+
+  variables {
+    min_count = 0
+    max_count = 0
+  }
+
+  assert {
+    condition     = length(aws_appautoscaling_policy.cpu) == 0 && aws_appautoscaling_target.this.max_capacity == 0
+    error_message = "min == max is a fixed size with no scaling policy."
+  }
+}
+
 run "without_secrets" {
   command = apply
 

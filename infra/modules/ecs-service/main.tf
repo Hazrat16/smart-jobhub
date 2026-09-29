@@ -146,10 +146,11 @@ resource "aws_vpc_security_group_egress_rule" "all" {
 
 resource "aws_ecs_service" "this" {
   # checkov:skip=CKV_AWS_333:Public IP instead of a NAT gateway (PLAN.md cost decision); ingress is ALB-only.
-  name                              = var.name
-  cluster                           = var.cluster_arn
-  task_definition                   = aws_ecs_task_definition.this.arn
-  desired_count                     = var.desired_count
+  name            = var.name
+  cluster         = var.cluster_arn
+  task_definition = aws_ecs_task_definition.this.arn
+  # Initial size only. Application Auto Scaling owns it afterwards (see below).
+  desired_count                     = var.min_count
   health_check_grace_period_seconds = var.health_check_grace_period_seconds
   enable_execute_command            = false
   propagate_tags                    = "SERVICE"
@@ -183,6 +184,45 @@ resource "aws_ecs_service" "this" {
   lifecycle {
     # CD owns the running revision: it registers a new revision (based on the
     # latest one, so Terraform env/secret changes are picked up) with a new image.
-    ignore_changes = [task_definition]
+    # Application Auto Scaling owns desired_count.
+    ignore_changes = [task_definition, desired_count]
+
+    precondition {
+      condition     = var.max_count >= var.min_count
+      error_message = "max_count must be >= min_count."
+    }
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Scaling. Always registered, so changing min_count also resizes a fixed-size
+# service (Application Auto Scaling moves the service to within min..max).
+# ---------------------------------------------------------------------------
+
+resource "aws_appautoscaling_target" "this" {
+  service_namespace  = "ecs"
+  scalable_dimension = "ecs:service:DesiredCount"
+  resource_id        = "service/${element(split("/", var.cluster_arn), 1)}/${aws_ecs_service.this.name}"
+  min_capacity       = var.min_count
+  max_capacity       = var.max_count
+}
+
+resource "aws_appautoscaling_policy" "cpu" {
+  count = var.max_count > var.min_count ? 1 : 0
+
+  name               = "${var.name}-cpu"
+  policy_type        = "TargetTrackingScaling"
+  service_namespace  = aws_appautoscaling_target.this.service_namespace
+  scalable_dimension = aws_appautoscaling_target.this.scalable_dimension
+  resource_id        = aws_appautoscaling_target.this.resource_id
+
+  target_tracking_scaling_policy_configuration {
+    target_value       = var.cpu_target_percent
+    scale_out_cooldown = 60
+    scale_in_cooldown  = 300
+
+    predefined_metric_specification {
+      predefined_metric_type = "ECSServiceAverageCPUUtilization"
+    }
   }
 }

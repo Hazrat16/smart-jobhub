@@ -94,19 +94,23 @@ jobs:
 
   # Skipped until the bootstrap is applied and its outputs are stored as repo
   # variables (infra/BOOTSTRAP.md step 6).
-  plan-staging:
+  plan:
     needs: [changes, static]
     if: >-
       github.event_name == 'pull_request'
       && needs.changes.outputs.infra == 'true'
       && vars.AWS_INFRA_PLANNER_ROLE_ARN != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [staging, prod]
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     defaults:
       run:
-        working-directory: infra/envs/staging
+        working-directory: infra/envs/${{ matrix.env }}
     steps:
       - uses: actions/checkout@v4
 
@@ -125,14 +129,15 @@ jobs:
 
       - name: terraform plan
         run: |
-          terraform plan -input=false -no-color -lock-timeout=5m -out=staging.tfplan
+          terraform plan -input=false -no-color -lock-timeout=5m -out=pr.tfplan
           {
-            echo '### Staging plan'
+            echo "### ${{ matrix.env }} plan"
             echo '```'
-            terraform show -no-color staging.tfplan | tail -c 60000
+            terraform show -no-color pr.tfplan | tail -c 60000
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+  # Staging infra applies on merge: the PR's reviewed plan is the approval.
   apply-staging:
     needs: [changes, static]
     if: >-
@@ -172,9 +177,115 @@ jobs:
       - name: terraform apply
         run: terraform apply -input=false -no-color -lock-timeout=5m staging.tfplan
 
+  # Prod: plan after staging applied cleanly, save the plan, and apply exactly
+  # that file after a reviewer approves the `production` environment.
+  plan-prod:
+    needs: [changes, apply-staging]
+    if: github.event_name == 'push' && needs.apply-staging.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+      plan_key: ${{ steps.plan.outputs.plan_key }}
+      plan_sha256: ${{ steps.plan.outputs.plan_sha256 }}
+    defaults:
+      run:
+        working-directory: infra/envs/prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_INFRA_PLANNER_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - id: plan
+        name: terraform plan (saved for approval)
+        env:
+          PLAN_KEY: plans/prod/${{ github.run_id }}-${{ github.run_attempt }}.tfplan
+        run: |
+          set +e
+          terraform plan -input=false -no-color -lock-timeout=5m -detailed-exitcode -out=prod.tfplan
+          rc=$?
+          set -e
+          # -detailed-exitcode: 0 = no changes, 2 = changes, anything else = error.
+          case "$rc" in
+            0) echo "has_changes=false" >> "$GITHUB_OUTPUT"
+               echo "### prod: no changes" >> "$GITHUB_STEP_SUMMARY"
+               exit 0 ;;
+            2) ;;
+            *) exit "$rc" ;;
+          esac
+          aws s3 cp --only-show-errors prod.tfplan "s3://${{ vars.TF_STATE_BUCKET }}/${PLAN_KEY}"
+          {
+            echo "has_changes=true"
+            echo "plan_key=${PLAN_KEY}"
+            echo "plan_sha256=$(sha256sum prod.tfplan | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### prod plan (waiting for approval)"
+            echo "Approving the **production** environment applies exactly this plan."
+            echo '```'
+            terraform show -no-color prod.tfplan | tail -c 60000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply-prod:
+    needs: plan-prod
+    if: needs.plan-prod.outputs.has_changes == 'true'
+    runs-on: ubuntu-latest
+    # Required reviewers: read the plan in plan-prod's summary, then approve.
+    environment: production
+    concurrency:
+      group: terraform-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/envs/prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_INFRA_DEPLOYER_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: Fetch and verify the approved plan
+        env:
+          PLAN_KEY: ${{ needs.plan-prod.outputs.plan_key }}
+          PLAN_SHA256: ${{ needs.plan-prod.outputs.plan_sha256 }}
+        run: |
+          aws s3 cp --only-show-errors "s3://${{ vars.TF_STATE_BUCKET }}/${PLAN_KEY}" prod.tfplan
+          echo "${PLAN_SHA256}  prod.tfplan" | sha256sum --check --strict
+
+      # Terraform also refuses a saved plan if the state changed since it was made.
+      - name: terraform apply (saved plan)
+        run: terraform apply -input=false -no-color -lock-timeout=5m prod.tfplan
+
   # Single required status check for branch protection.
   infra-ci:
-    needs: [changes, static, plan-staging]
+    needs: [changes, static, plan]
     if: always()
     runs-on: ubuntu-latest
     steps:

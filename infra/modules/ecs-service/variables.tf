@@ -50,10 +50,27 @@ variable "memory" {
   default     = 512
 }
 
-variable "desired_count" {
-  description = "Number of running tasks. 0 keeps the service defined but stopped."
+variable "min_count" {
+  description = "Minimum running tasks (0 keeps the service defined but stopped)."
   type        = number
   default     = 1
+}
+
+variable "max_count" {
+  description = "Maximum running tasks. Equal to min_count means a fixed size with no scaling policy."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.max_count >= 0
+    error_message = "max_count can't be negative."
+  }
+}
+
+variable "cpu_target_percent" {
+  description = "Target average CPU for scaling between min_count and max_count."
+  type        = number
+  default     = 60
 }
 
 variable "environment" {

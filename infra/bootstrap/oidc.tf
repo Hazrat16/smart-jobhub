@@ -99,6 +99,15 @@ data "aws_iam_policy_document" "planner_state" {
     resources = ["arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:/${var.project}/*/redis-*"]
   }
 
+  # Saved prod plans: written after merge, applied after approval by
+  # infra-deployer. The apply job checks the file's SHA-256 against the plan
+  # job's output, so an overwrite (e.g. from a PR session) is refused.
+  statement {
+    sid       = "SavePlans"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.tfstate.arn}/plans/*"]
+  }
+
   # `plan` takes the S3 native lock, which is a .tflock object next to the state.
   statement {
     sid       = "Lock"
@@ -112,7 +121,11 @@ module "infra_planner" {
 
   name              = "${var.project}-infra-planner"
   oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
-  subjects          = ["repo:${var.github_repo}:pull_request:job_workflow_ref:${local.infra_wf}@refs/pull/*/merge"]
+  subjects = [
+    "repo:${var.github_repo}:pull_request:job_workflow_ref:${local.infra_wf}@refs/pull/*/merge",
+    # After merge: the prod plan that waits for approval.
+    "repo:${var.github_repo}:ref:refs/heads/main:job_workflow_ref:${local.infra_wf}@refs/heads/main",
+  ]
 
   managed_policy_arns = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
   inline_policies     = { state = data.aws_iam_policy_document.planner_state.json }

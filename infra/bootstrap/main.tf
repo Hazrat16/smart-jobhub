@@ -75,6 +75,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "tfstate" {
       days_after_initiation = 7
     }
   }
+
+  # Saved prod plans are only useful until they're applied or go stale.
+  rule {
+    id     = "expire-saved-plans"
+    status = "Enabled"
+
+    filter {
+      prefix = "plans/"
+    }
+
+    expiration {
+      days = 7
+    }
+  }
 }
 
 data "aws_iam_policy_document" "tfstate" {
