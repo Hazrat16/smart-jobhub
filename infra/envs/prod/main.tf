@@ -3,10 +3,11 @@
 module "env" {
   source = "../../modules/environment"
 
-  environment = "prod"
-  vpc_cidr    = "10.30.0.0/16"
-  zone_name   = var.zone_name
-  domain_name = var.domain_name
+  environment  = "prod"
+  vpc_cidr     = "10.30.0.0/16"
+  zone_name    = var.zone_name
+  domain_name  = var.domain_name
+  alert_emails = var.alert_emails
 
   use_spot = false
   api      = { cpu = 256, memory = 512, min_count = var.api_min_count, max_count = 3 }

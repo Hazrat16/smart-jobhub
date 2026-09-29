@@ -4,7 +4,9 @@
 #
 # The new revision is based on the family's latest revision, so env, secret and
 # size changes applied by Terraform ship with the next deploy.
-# Env: CLUSTER, SERVICE, IMAGE, TIMEOUT_SECONDS (default 1200).
+# Env: CLUSTER, SERVICE, IMAGE, VERSION (optional; set as APP_VERSION in the
+#      container, used for Sentry releases and the health check),
+#      TIMEOUT_SECONDS (default 1200).
 set -euo pipefail
 
 timeout="${TIMEOUT_SECONDS:-1200}"
@@ -18,8 +20,15 @@ family=$(aws ecs describe-task-definition --task-definition "${current}" \
 # Latest ACTIVE revision of the family (Terraform may have registered one
 # since the last deploy), with only the app container's image swapped.
 aws ecs describe-task-definition --task-definition "${family}" --query taskDefinition --output json |
-  jq --arg image "${IMAGE}" '
-    .containerDefinitions |= map(if .name == "app" then .image = $image else . end)
+  jq --arg image "${IMAGE}" --arg version "${VERSION:-}" '
+    .containerDefinitions |= map(
+      if .name == "app" then
+        .image = $image
+        | if $version == "" then . else
+            .environment = ([(.environment // [])[] | select(.name != "APP_VERSION")]
+                            + [{name: "APP_VERSION", value: $version}])
+          end
+      else . end)
     | del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .compatibilities,
           .registeredAt, .registeredBy, .deregisteredAt)' > taskdef.json
 

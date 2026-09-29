@@ -104,3 +104,19 @@ variable "redis_snapshot_retention_days" {
   type        = number
   default     = 0
 }
+
+variable "alert_emails" {
+  description = "Who gets alarm emails. Each address must click the AWS confirmation link once."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.alert_emails) > 0
+    error_message = "Set at least one alert email."
+  }
+}
+
+variable "redis_node_type" {
+  description = "Valkey node type. Move to cache.t4g.small if memory stays high (docs/runbook.md#redis-memory)."
+  type        = string
+  default     = "cache.t4g.micro"
+}

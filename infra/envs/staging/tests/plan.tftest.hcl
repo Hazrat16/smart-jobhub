@@ -63,6 +63,17 @@ mock_provider "aws" {
     defaults = { arn = "arn:aws:ecs:ap-south-1:123456789012:task-definition/mock:1" }
   }
 
+  mock_resource "aws_elasticache_replication_group" {
+    defaults = {
+      member_clusters          = ["job-platform-staging-001"]
+      primary_endpoint_address = "master.job-platform-staging.abc123.aps1.cache.amazonaws.com"
+    }
+  }
+
+  mock_resource "aws_sns_topic" {
+    defaults = { arn = "arn:aws:sns:ap-south-1:123456789012:job-platform-staging-alerts" }
+  }
+
   mock_resource "aws_acm_certificate" {
     defaults = {
       arn = "arn:aws:acm:ap-south-1:123456789012:certificate/mock"
@@ -77,8 +88,9 @@ mock_provider "aws" {
 }
 
 variables {
-  zone_name   = "example.com"
-  domain_name = "staging.example.com"
+  alert_emails = ["alerts@example.com"]
+  zone_name    = "example.com"
+  domain_name  = "staging.example.com"
 }
 
 # Wiring details are asserted in modules/*/tests; this checks the whole stack

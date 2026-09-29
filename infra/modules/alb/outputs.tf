@@ -32,3 +32,13 @@ output "url" {
   description = "Public URL of the environment."
   value       = "https://${var.domain_name}"
 }
+
+output "api_target_group_arn_suffix" {
+  description = "api target group ARN suffix, for CloudWatch metrics."
+  value       = aws_lb_target_group.api.arn_suffix
+}
+
+output "web_target_group_arn_suffix" {
+  description = "web target group ARN suffix, for CloudWatch metrics."
+  value       = aws_lb_target_group.web.arn_suffix
+}

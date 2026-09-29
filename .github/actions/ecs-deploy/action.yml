@@ -11,8 +11,16 @@ inputs:
   image:
     description: Full image reference (registry/repo:tag).
     required: true
+  version:
+    description: Release version (e.g. api-v12). Set as APP_VERSION in the container.
+    required: false
+    default: ""
   smoke-url:
     description: URL that must return 200 after the rollout. Empty skips the check.
+    required: false
+    default: ""
+  expect-version:
+    description: If set, the smoke URL's JSON body must have "version" equal to this (proves the new version is serving).
     required: false
     default: ""
   timeout-seconds:
@@ -37,6 +45,7 @@ runs:
         CLUSTER: ${{ inputs.cluster }}
         SERVICE: ${{ inputs.service }}
         IMAGE: ${{ inputs.image }}
+        VERSION: ${{ inputs.version }}
         TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
       run: ${{ github.action_path }}/deploy.sh
 
@@ -45,10 +54,18 @@ runs:
       shell: bash
       env:
         URL: ${{ inputs.smoke-url }}
+        EXPECT_VERSION: ${{ inputs.expect-version }}
       run: |
         for i in $(seq 1 10); do
-          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$URL" || true)
-          [ "$code" = 200 ] && { echo "$URL -> 200"; exit 0; }
-          echo "Attempt $i: $URL -> $code"; sleep 6
+          code=$(curl -s -o body.json -w '%{http_code}' --max-time 10 "$URL" || true)
+          if [ "$code" = 200 ]; then
+            if [ -z "$EXPECT_VERSION" ]; then echo "$URL -> 200"; exit 0; fi
+            got=$(jq -r '.version // empty' body.json 2>/dev/null || true)
+            [ "$got" = "$EXPECT_VERSION" ] && { echo "$URL -> 200, version $got"; exit 0; }
+            echo "Attempt $i: $URL -> 200 but version '$got' (want $EXPECT_VERSION)"
+          else
+            echo "Attempt $i: $URL -> $code"
+          fi
+          sleep 6
         done
-        echo "::error::Smoke test failed: $URL did not return 200."; exit 1
+        echo "::error::Smoke test failed: $URL did not return 200${EXPECT_VERSION:+ with version $EXPECT_VERSION}."; exit 1

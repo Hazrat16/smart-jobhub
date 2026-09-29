@@ -137,6 +137,8 @@ jobs:
           cluster: job-platform-staging
           service: job-platform-staging-api
           image: ${{ steps.ecr.outputs.registry }}/job-platform-api:${{ env.VERSION }}
+          version: ${{ env.VERSION }}
+          expect-version: ${{ env.VERSION }}
           smoke-url: ${{ vars.APP_URL && format('{0}/api/health/ready', vars.APP_URL) || '' }}
 
       # Only a version that actually ran and passed the smoke test counts.
@@ -190,6 +192,8 @@ jobs:
           cluster: job-platform-prod
           service: job-platform-prod-api
           image: ${{ steps.ecr.outputs.registry }}/job-platform-api:${{ env.VERSION }}
+          version: ${{ env.VERSION }}
+          expect-version: ${{ env.VERSION }}
           smoke-url: ${{ vars.APP_URL && format('{0}/api/health/ready', vars.APP_URL) || '' }}
 
       - name: Summary

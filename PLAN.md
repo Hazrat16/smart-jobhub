@@ -230,6 +230,25 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - The planner now also trusts `ref:refs/heads/main` for infra.yml (the prod plan after merge) and may
   write `plans/*`; saved plans expire after 7 days. **Re-apply the bootstrap.**
 
+### Phase 8 notes
+
+- `modules/monitoring` (per env): SNS topic + email subscriptions; alarms for ALB 5xx, per-app 5xx, api
+  p95 latency > 2 s, **no healthy targets** (armed only for services with `min_count >= 1`, missing data
+  = down), ECS CPU/memory > 85% for 15 minutes, Valkey memory > 80% (noeviction makes 100% an outage);
+  an EventBridge rule for `SERVICE_DEPLOYMENT_FAILED`. About $1/month per env. Every alarm links to its
+  runbook section.
+- Budget (bootstrap, account-wide): $110/month, emails at 80%/100% actual and 100% forecast.
+- **Sentry:** `environment` was `NODE_ENV`, which is `production` in both envs. Now it's
+  `SENTRY_ENVIRONMENT` (Terraform: `staging` / `production`), and `release` = `APP_VERSION` (set by the
+  deploy, e.g. `api-v12`). Sentry creates releases from events, so no auth token is needed in CI.
+- `/api/health` and `/api/health/ready` return `version`; the api deploy's smoke test fails unless the
+  new version is the one answering. `modules/environment` exposes `redis_node_type`.
+- Docs: `docs/runbook.md` (per-alarm steps, logs, stopped-task reasons, rollback, scaling, costs) and
+  `docs/restore-drill.md` (quarterly Atlas restore into a temporary cluster, with count and freshness
+  checks and a drill log).
+- **Follow-ups:** Sentry for the web app (with source maps uploaded to Sentry, not served publicly);
+  activate the `Project`/`Environment` cost allocation tags; first restore drill once prod has data.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
@@ -248,6 +267,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
        (Code done and tested with mocks; waiting on bootstrap re-apply, prod domain, and first approval.)
 8. [ ] **Operations:** CloudWatch alarms → SNS, AWS Budgets alert, Sentry releases, `docs/runbook.md`,
        an Atlas restore test.
+       (Code and docs done; waiting on apply, alert email confirmation, and the first restore drill.)
 9. [ ] **CV polish:** README diagram, badges, live demo and demo login, ADRs.
 
 ## Prerequisites the owner must provide

@@ -13,6 +13,7 @@ a laptop, with an admin's credentials. After that, CI does all Terraform work th
 | IAM role | `/job-platform-ci/job-platform-infra-deployer` | `terraform apply` on `main`. PowerUserAccess + IAM limited to `/job-platform/` and the boundary. |
 | IAM role | `/job-platform-ci/job-platform-api-deployer` | `deploy-api.yml` on `main`, in the `staging` or `production` environment. Push/pull `job-platform-api`, update the api services, pass the api task roles. |
 | IAM role | `/job-platform-ci/job-platform-web-deployer` | The same for `deploy-web.yml` and the web services. |
+| Budget | `job-platform-monthly` | Account-wide, $110/month by default. Emails at 80% and 100% actual, and at 100% forecast. |
 
 The deployer roles live here rather than in the env stacks, so CI can't widen its own deploy permissions.
 
@@ -71,6 +72,8 @@ EOF
 ```
 
 ## 4. Apply the bootstrap stack
+
+Set `budget_alert_emails` (and `monthly_budget_usd` if you like) in `terraform.tfvars` first.
 
 ```bash
 cd infra/bootstrap

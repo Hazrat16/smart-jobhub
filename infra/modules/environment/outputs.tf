@@ -47,3 +47,8 @@ output "settings" {
     sslcommerz_sandbox  = var.sslcommerz_sandbox
   }
 }
+
+output "alerts_topic_arn" {
+  description = "SNS topic that receives alarms and failed-deployment events."
+  value       = module.monitoring.topic_arn
+}

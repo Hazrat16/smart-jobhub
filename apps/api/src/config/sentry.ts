@@ -11,9 +11,14 @@ export function initSentry(): void {
   const dsn = process.env["SENTRY_DSN"];
   if (!dsn || initialized) return;
 
+  // NODE_ENV is "production" in both staging and prod, so the deployed
+  // environment name comes from SENTRY_ENVIRONMENT (set per env by Terraform).
+  // APP_VERSION (e.g. api-v12) is set at deploy time; Sentry creates the release.
+  const release = process.env["APP_VERSION"];
   Sentry.init({
     dsn,
-    environment: process.env["NODE_ENV"] || "development",
+    environment: process.env["SENTRY_ENVIRONMENT"] || process.env["NODE_ENV"] || "development",
+    ...(release ? { release } : {}),
     tracesSampleRate: 0.1,
   });
   initialized = true;

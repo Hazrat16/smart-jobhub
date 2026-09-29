@@ -38,6 +38,9 @@ branch.
 
 ## Guard rails
 
+- **The smoke test proves the new version is serving.** `/api/health/ready` reports `version`
+  (`APP_VERSION`, set by the deploy), and the api deploy fails unless it matches. The same value tags
+  Sentry events as the release, and `SENTRY_ENVIRONMENT` separates staging from production.
 - **Production only takes versions that passed staging.** The check is the commit status
   `deploy/staging/<version>`, set only after a successful staging rollout and smoke test.
 - **Versions can't be overwritten.** ECR tags are IMMUTABLE, and the `release tags` ruleset blocks

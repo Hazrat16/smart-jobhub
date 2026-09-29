@@ -4,6 +4,11 @@ variable "region" {
   default     = "ap-south-1"
 }
 
+variable "alert_emails" {
+  description = "Who gets alarm emails (each confirms once). A shared alias beats a personal inbox."
+  type        = list(string)
+}
+
 variable "zone_name" {
   description = "Existing Route 53 public hosted zone, e.g. example.com."
   type        = string

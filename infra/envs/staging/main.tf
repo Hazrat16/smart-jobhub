@@ -2,10 +2,11 @@
 module "env" {
   source = "../../modules/environment"
 
-  environment = "staging"
-  vpc_cidr    = "10.20.0.0/16"
-  zone_name   = var.zone_name
-  domain_name = var.domain_name
+  environment  = "staging"
+  vpc_cidr     = "10.20.0.0/16"
+  zone_name    = var.zone_name
+  domain_name  = var.domain_name
+  alert_emails = var.alert_emails
 
   use_spot = true
   api      = { cpu = 256, memory = 512, min_count = var.api_desired_count, max_count = var.api_desired_count }

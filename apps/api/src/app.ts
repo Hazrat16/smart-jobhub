@@ -123,6 +123,10 @@ app.get("/api/test", (req, res) => {
   });
 });
 
+// Released version (e.g. api-v12), set by the deploy workflow. The deploy's
+// smoke test checks it to confirm the new version is the one serving.
+const APP_VERSION = process.env["APP_VERSION"] || "dev";
+
 app.get("/api/health", async (_req, res) => {
   const dbConnected = mongoose.connection.readyState === 1;
   const redisConnected = await pingRedis();
@@ -130,6 +134,7 @@ app.get("/api/health", async (_req, res) => {
   res.status(dbConnected ? 200 : 503).json({
     success: dbConnected,
     status,
+    version: APP_VERSION,
     services: {
       api: "up",
       db: dbConnected ? "up" : "down",
@@ -145,6 +150,7 @@ app.get("/api/health/ready", async (_req, res) => {
     return res.status(503).json({
       success: false,
       status: "not_ready",
+      version: APP_VERSION,
       reason: "Database not connected",
     });
   }
@@ -152,6 +158,7 @@ app.get("/api/health/ready", async (_req, res) => {
   return res.json({
     success: true,
     status: "ready",
+    version: APP_VERSION,
     services: {
       db: "up",
       redis: redisConnected ? "up" : "down",

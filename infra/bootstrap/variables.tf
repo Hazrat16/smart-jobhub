@@ -21,3 +21,19 @@ variable "apps" {
   type        = set(string)
   default     = ["api", "web"]
 }
+
+variable "monthly_budget_usd" {
+  description = "Monthly cost budget for the whole account (PLAN.md target: $70–110)."
+  type        = number
+  default     = 110
+}
+
+variable "budget_alert_emails" {
+  description = "Who gets budget emails (a shared alias beats a personal inbox)."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.budget_alert_emails) > 0
+    error_message = "Set at least one budget alert email."
+  }
+}

@@ -49,6 +49,7 @@ module "redis" {
   client_security_groups  = { api = module.api.security_group_id }
   secret_name             = "/${var.project}/${var.environment}/redis"
   snapshot_retention_days = var.redis_snapshot_retention_days
+  node_type               = var.redis_node_type
 }
 
 resource "aws_ecs_cluster" "this" {
@@ -94,6 +95,8 @@ module "api" {
     API_PUBLIC_BASE_URL   = local.public_url
     CORS_ALLOWED_ORIGINS  = local.public_url
     SSLCOMMERZ_IS_SANDBOX = tostring(var.sslcommerz_sandbox)
+    # NODE_ENV is "production" everywhere; this tells Sentry which env it is.
+    SENTRY_ENVIRONMENT = var.environment == "prod" ? "production" : var.environment
   }
 
   secrets = merge(
@@ -130,5 +133,28 @@ locals {
   services = {
     api = module.api
     web = module.web
+  }
+}
+
+module "monitoring" {
+  source = "../monitoring"
+
+  name                   = local.name
+  alert_emails           = var.alert_emails
+  alb_arn_suffix         = module.alb.arn_suffix
+  cluster_name           = aws_ecs_cluster.this.name
+  redis_cache_cluster_id = module.redis.cache_cluster_id
+
+  services = {
+    api = {
+      service_name            = module.api.service_name
+      target_group_arn_suffix = module.alb.api_target_group_arn_suffix
+      expected_running        = var.api.min_count >= 1
+    }
+    web = {
+      service_name            = module.web.service_name
+      target_group_arn_suffix = module.alb.web_target_group_arn_suffix
+      expected_running        = var.web.min_count >= 1
+    }
   }
 }
