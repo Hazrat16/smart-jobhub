@@ -37,8 +37,7 @@ jobs:
               - 'infra/**'
               - '.github/workflows/infra.yml'
 
-  # Static checks only; needs no AWS access. `plan` on PRs (infra-planner role)
-  # and `apply` on main (infra-deployer role) are added with the env stacks.
+  # Static checks and mocked-provider tests; no AWS access.
   static:
     needs: changes
     if: needs.changes.outputs.infra == 'true'
@@ -67,6 +66,17 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: terraform test (mocked provider, every dir with tests/)
+        run: |
+          find . -type d -name tests -not -path '*/.terraform/*' -print0 |
+            while IFS= read -r -d '' tests; do
+              dir=$(dirname "$tests")
+              echo "::group::$dir"
+              terraform -chdir="$dir" init -backend=false -input=false
+              terraform -chdir="$dir" test
+              echo "::endgroup::"
+            done
+
       - uses: terraform-linters/setup-tflint@v4
         with:
           tflint_version: ${{ env.TFLINT_VERSION }}
@@ -82,9 +92,89 @@ jobs:
         run: |
           pipx run "checkov==${CHECKOV_VERSION}" -d . --framework terraform --compact --quiet
 
+  # Skipped until the bootstrap is applied and its outputs are stored as repo
+  # variables (infra/BOOTSTRAP.md step 6).
+  plan-staging:
+    needs: [changes, static]
+    if: >-
+      github.event_name == 'pull_request'
+      && needs.changes.outputs.infra == 'true'
+      && vars.AWS_INFRA_PLANNER_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/envs/staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_INFRA_PLANNER_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: terraform plan
+        run: |
+          terraform plan -input=false -no-color -lock-timeout=5m -out=staging.tfplan
+          {
+            echo '### Staging plan'
+            echo '```'
+            terraform show -no-color staging.tfplan | tail -c 60000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  apply-staging:
+    needs: [changes, static]
+    if: >-
+      github.event_name == 'push'
+      && needs.changes.outputs.infra == 'true'
+      && vars.AWS_INFRA_DEPLOYER_ROLE_ARN != ''
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency:
+      group: terraform-staging
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    defaults:
+      run:
+        working-directory: infra/envs/staging
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_INFRA_DEPLOYER_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: terraform init
+        run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
+
+      - name: terraform plan
+        run: terraform plan -input=false -no-color -lock-timeout=5m -out=staging.tfplan
+
+      - name: terraform apply
+        run: terraform apply -input=false -no-color -lock-timeout=5m staging.tfplan
+
   # Single required status check for branch protection.
   infra-ci:
-    needs: [changes, static]
+    needs: [changes, static, plan-staging]
     if: always()
     runs-on: ubuntu-latest
     steps:

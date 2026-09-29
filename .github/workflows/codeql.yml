@@ -22,8 +22,9 @@ jobs:
       - uses: github/codeql-action/init@v3
         with:
           languages: javascript-typescript
-          paths-ignore: |
-            **/node_modules
-            **/test-results
+          config: |
+            paths-ignore:
+              - "**/node_modules"
+              - "**/test-results"
 
       - uses: github/codeql-action/analyze@v3

@@ -136,6 +136,27 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - `infra.yml` currently runs fmt / validate / tflint / checkov (no AWS access). `plan` / `apply` get added
   with the staging stack in step 4.
 
+### Phase 4 notes
+
+- `infra/envs/staging` composes `modules/network`, `modules/alb` (ACM + Route 53 alias + path rules),
+  `modules/secrets` and `modules/ecs-service` (one per app). Runbook: `infra/envs/staging/README.md`.
+- Needs an existing Route 53 hosted zone; set `zone_name` / `domain_name` in `terraform.tfvars`.
+- Services start at `desired_count = 0` and are raised once the secret is filled (step 5) and an
+  image is pushed (step 6).
+- Staging runs on FARGATE_SPOT. Rough staging cost: about $40/month before Atlas and Redis.
+- **Change from the target layout:** no `apps/api/deploy/task-def.json`. Terraform owns the task
+  definition (env, secrets, roles). CD takes the latest revision, swaps the image and registers a new
+  one; the service ignores `task_definition` changes, so an apply never rolls back the running image.
+  A JSON file would have duplicated the env and secret list in two places.
+- API change: `app.set("trust proxy", TRUST_PROXY_HOPS)` (1 in ECS). Without it every client behind
+  the ALB shared one rate-limit bucket.
+- `terraform test` with a mocked AWS provider (root + `modules/alb` + `modules/ecs-service`) runs in CI
+  and caught two plan-time `count`/`for_each` bugs before any real plan.
+- `infra.yml`: PR → staging plan (infra-planner, output in the job summary); merge → staging apply
+  (infra-deployer, `staging` environment). Both are skipped until the bootstrap repo variables exist.
+- Fixed a Phase 1 bug that actionlint found: `paths-ignore` isn't a valid CodeQL init input; it now
+  goes in `config`.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
@@ -144,6 +165,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 3. [ ] **Infra bootstrap** (manual, documented in `infra/BOOTSTRAP.md`): state bucket, OIDC provider, ECR.
        (Code done and passes fmt/validate/tflint/checkov; waiting on the owner to run BOOTSTRAP.md.)
 4. [ ] **Staging infra:** network, ALB, ACM, Route 53, ECS services.
+       (Code done and tested with a mocked provider; waiting on bootstrap + domain in `terraform.tfvars`.)
 5. [ ] **Data and secrets:** Atlas cluster, Redis, Secrets Manager values populated.
 6. [ ] **CD workflows:** merge to `main` deploys to staging automatically.
 7. [ ] **Prod:** approval gate, autoscaling, circuit breaker.

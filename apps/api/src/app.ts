@@ -34,6 +34,9 @@ logInfo("app.ts loaded");
 const allowedOrigins = getAllowedOrigins();
 
 const app = express();
+// Number of reverse proxies in front of the app (1 behind the AWS ALB). Without it,
+// req.ip is the proxy's address and every client shares one rate-limit bucket.
+app.set("trust proxy", Number(process.env["TRUST_PROXY_HOPS"] ?? 0));
 app.use(helmet());
 app.use(
   cors({
