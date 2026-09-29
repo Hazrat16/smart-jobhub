@@ -4,9 +4,13 @@ variable "name" {
 }
 
 variable "keep_tagged_images" {
-  description = "How many tagged images to keep. Older ones are expired by the lifecycle policy."
+  description = <<-EOT
+    How many tagged images (versions) to keep; older ones are expired. Keep this well above the number
+    of versions released between production deploys: if the version prod runs is expired, prod can't
+    start new tasks (scale-out, restarts) until it's redeployed.
+  EOT
   type        = number
-  default     = 50
+  default     = 200
 }
 
 variable "untagged_expiry_days" {

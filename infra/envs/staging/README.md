@@ -46,8 +46,16 @@ To add a key, add it to `api_secret_keys` **and** to the secret value *before* m
 
 ## Turning the services on
 
-Once the secret has values and CD has pushed an image (step 6), set `api_desired_count` and
-`web_desired_count` to `1` in `terraform.tfvars`.
+1. Fill in the secret (above).
+2. **Actions → deploy-api** and **deploy-web**, environment staging, version empty. This creates `api-v1` /
+   `web-v1` and registers them. With 0 desired tasks nothing starts yet; the run says so and doesn't
+   mark the version as tested.
+3. Set `api_desired_count` and `web_desired_count` to `1` in `terraform.tfvars` and merge. The services
+   start on the version from step 2.
+4. Run the deploy again with version `api-v1` / `web-v1`. This time the smoke test runs, and the version
+   is marked as passed staging, so it can be promoted to production.
+
+See `docs/releasing.md` for everyday releases.
 
 ## Who owns what
 

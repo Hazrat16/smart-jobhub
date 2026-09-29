@@ -7,15 +7,16 @@ a laptop, with an admin's credentials. After that, CI does all Terraform work th
 |---|---|---|
 | S3 bucket | `job-platform-tfstate-<ACCOUNT_ID>` | Terraform state for all stacks. Versioned, SSE-S3, public access blocked, TLS only, native lockfile. |
 | OIDC provider | `token.actions.githubusercontent.com` | Lets GitHub Actions get short-lived AWS credentials. No static keys. |
-| ECR repos | `job-platform-api`, `job-platform-web` | IMMUTABLE tags, scan on push, untagged images expire after 7 days, last 50 tagged images kept. |
+| ECR repos | `job-platform-api`, `job-platform-web` | IMMUTABLE tags, scan on push, untagged images expire after 7 days, last 200 versions kept. |
 | IAM policy | `/job-platform/job-platform-workload-boundary` | Permissions boundary that every role created by the env stacks must carry. |
 | IAM role | `/job-platform-ci/job-platform-infra-planner` | `terraform plan` on PRs. ReadOnlyAccess + state read + lock + read of the Terraform-generated `/job-platform/*/redis` secrets (already in state). |
 | IAM role | `/job-platform-ci/job-platform-infra-deployer` | `terraform apply` on `main`. PowerUserAccess + IAM limited to `/job-platform/` and the boundary. |
+| IAM role | `/job-platform-ci/job-platform-api-deployer` | `deploy-api.yml` on `main`, in the `staging` or `production` environment. Push/pull `job-platform-api`, update the api services, pass the api task roles. |
+| IAM role | `/job-platform-ci/job-platform-web-deployer` | The same for `deploy-web.yml` and the web services. |
 
-The `api-deployer` and `web-deployer` roles are created with the CD workflows (rollout step 6), in the
-env stacks, using `modules/github-oidc`.
+The deployer roles live here rather than in the env stacks, so CI can't widen its own deploy permissions.
 
-Expected cost: a few cents a month for S3, plus ECR storage at $0.10/GB-month. The OIDC provider and IAM are free.
+Expected cost: a few cents a month for S3, plus ECR storage at $0.10/GB-month (about $2/month at 200 versions). The OIDC provider and IAM are free.
 
 ## Prerequisites
 
@@ -101,6 +102,23 @@ gh variable set TF_STATE_BUCKET             --body "$(terraform output -raw stat
 gh variable set AWS_INFRA_PLANNER_ROLE_ARN  --body "$(terraform output -raw infra_planner_role_arn)"
 gh variable set AWS_INFRA_DEPLOYER_ROLE_ARN --body "$(terraform output -raw infra_deployer_role_arn)"
 gh variable set WORKLOAD_BOUNDARY_ARN       --body "$(terraform output -raw workload_boundary_arn)"
+gh variable set AWS_API_DEPLOYER_ROLE_ARN   --body "$(terraform output -json deployer_role_arns | jq -r .api)"
+gh variable set AWS_WEB_DEPLOYER_ROLE_ARN   --body "$(terraform output -json deployer_role_arns | jq -r .web)"
+
+# Per environment: the public URL, used by the deploy workflows' smoke tests and shown on each run.
+gh variable set APP_URL --env staging    --body "https://staging.<your-domain>"
+gh variable set APP_URL --env production --body "https://<your-domain>"
+```
+
+Protect release tags so a version always points at the commit that was tested. Nobody can delete or
+move `api-v*` / `web-v*`:
+
+```bash
+gh api -X POST repos/Hazrat16/smart-jobhub/rulesets --input - <<'EOF'
+{"name": "release tags", "target": "tag", "enforcement": "active",
+ "conditions": {"ref_name": {"include": ["refs/tags/api-v*", "refs/tags/web-v*"], "exclude": []}},
+ "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}, {"type": "update"}]}
+EOF
 ```
 
 ## 7. Check it worked

@@ -26,8 +26,10 @@ Status is tracked in the checklist at the bottom.
 - **Secrets:** Secrets Manager `/job-platform/{env}/api`. ECS injects them when a task starts, and
   CI never reads the values. Terraform creates *empty* secrets; the values are filled in by hand.
 - **Terraform state:** S3, encrypted and versioned, with native lockfile (no DynamoDB table).
-- **Environments:** `staging` (auto-deploy on merge to `main`) and `prod` (same image, manual approval
-  via the GitHub Environment `production`).
+- **Environments:** `staging` and `prod`. **Deploys are manual and versioned** (changed in step 6 at
+  the owner's request; this replaces "auto-deploy staging on merge"). A staging run cuts `api-vN` /
+  `web-vN` from a chosen branch, and production promotes the same image after approval. See
+  `docs/releasing.md`.
 - **Safety:** ECS deployment circuit breaker with rollback. Health check on `/api/health/ready`
   (already exists in `apps/api/src/app.ts`).
 - **Cost target:** about $70–110/mo for both environments. Avoid a NAT gateway: tasks run in public
@@ -58,9 +60,12 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 
 - **PR:** `npm ci` → `npm audit` → lint → typecheck → tests (Mongo and Redis service containers) →
   docker build → Trivy scan → CodeQL. Web also runs the Playwright smoke test.
-- **Merge to `main`:** build the image once → push `:<sha>` to ECR → deploy to staging → wait for the
-  service to be stable → smoke test `/api/health/ready` → Sentry release.
-- **Prod:** approval gate → same `:<sha>` image, no rebuild → wait for stable → notify.
+- **Merge to `main`:** CI only. Nothing deploys.
+- **Staging (manual, `deploy-<app>.yml`):** version empty → next `<app>-vN` from Branch → build →
+  Trivy → push `job-platform-<app>:<app>-vN` → git tag → deploy → watch rollout → smoke test → commit
+  status `deploy/staging/<app>-vN`. Or enter an existing version to redeploy it.
+- **Prod (manual):** version must have that staging status → approval gate → same image, no rebuild →
+  watch rollout → smoke test. Rollback = promote the previous version.
 
 ## Known issues to fix (found during review)
 
@@ -185,6 +190,27 @@ README.md                 live demo, badges, diagram, "production readiness" sec
   (desired count 0 plus a scheduled scale-down), share one ALB for both envs via host rules (−$18), or
   stay on M0/free Redis for staging.
 
+### Phase 6 notes
+
+- Deploy workflows are `workflow_dispatch` only, one per app so each has its own role. Inputs:
+  environment, version, branch. The logic lives in `.github/scripts/resolve-release.sh` and
+  `.github/actions/ecs-deploy/` (tested locally: 16 release scenarios on a real git repo, 5 rollout
+  outcomes against a stubbed ECS).
+- Roles `job-platform-{api,web}-deployer` are in **bootstrap** (`deployers.tf`), not the env stacks, so
+  CI can't widen its own deploy rights. They trust `deploy-<app>.yml@refs/heads/main` in the `staging` or
+  `production` environment only. Scripts and actions always run from main; the branch being built is
+  checked out into `build-src/` and built and scanned before AWS credentials exist in the job.
+- The rollout is judged by the new deployment's `rolloutState`, not `services-stable`, because after a
+  circuit-breaker rollback the service is stable again, on the old revision.
+- The staging → prod gate is a commit status, set only after a rollout that ran tasks and passed the
+  smoke test. A service with 0 desired tasks deploys but isn't marked as tested.
+- ECR now keeps 200 versions (was 50). Otherwise the version prod runs could expire, and prod couldn't
+  start new tasks.
+- `infra.yml` still applies staging **infra** on merge to `main` (Terraform, not app deploys). Say if
+  that should become manual too.
+- `apps/api/deploy/task-def.json` isn't used (see Phase 4 notes); the deploy action derives the new
+  revision from the family's latest one.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
@@ -196,7 +222,9 @@ README.md                 live demo, badges, diagram, "production readiness" sec
        (Code done and tested with a mocked provider; waiting on bootstrap + domain in `terraform.tfvars`.)
 5. [ ] **Data and secrets:** Atlas cluster, Redis, Secrets Manager values populated.
        (Redis in Terraform, Atlas + secret values documented in `infra/DATA.md`; waiting on the owner.)
-6. [ ] **CD workflows:** merge to `main` deploys to staging automatically.
+6. [ ] **CD workflows:** manual, versioned deploys (`deploy-api.yml`, `deploy-web.yml`).
+       (Workflows done and tested locally; need the bootstrap re-applied for the deployer roles, repo/env
+       variables, and a first run.)
 7. [ ] **Prod:** approval gate, autoscaling, circuit breaker.
 8. [ ] **Operations:** CloudWatch alarms → SNS, AWS Budgets alert, Sentry releases, `docs/runbook.md`,
        an Atlas restore test.

@@ -1,0 +1,54 @@
+name: ECS deploy
+description: Register a new task definition revision with an image, roll the service to it, and smoke-test the URL.
+
+inputs:
+  cluster:
+    description: ECS cluster name.
+    required: true
+  service:
+    description: ECS service name.
+    required: true
+  image:
+    description: Full image reference (registry/repo:tag).
+    required: true
+  smoke-url:
+    description: URL that must return 200 after the rollout. Empty skips the check.
+    required: false
+    default: ""
+  timeout-seconds:
+    description: How long to wait for the rollout.
+    required: false
+    default: "1200"
+
+outputs:
+  task-definition-arn:
+    description: The revision now running.
+    value: ${{ steps.deploy.outputs.task_definition_arn }}
+  desired-count:
+    description: The service's desired task count ("0" means nothing ran, so nothing was tested).
+    value: ${{ steps.deploy.outputs.desired_count }}
+
+runs:
+  using: composite
+  steps:
+    - id: deploy
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+        SERVICE: ${{ inputs.service }}
+        IMAGE: ${{ inputs.image }}
+        TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
+      run: ${{ github.action_path }}/deploy.sh
+
+    - name: Smoke test
+      if: inputs.smoke-url != '' && steps.deploy.outputs.desired_count != '0'
+      shell: bash
+      env:
+        URL: ${{ inputs.smoke-url }}
+      run: |
+        for i in $(seq 1 10); do
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$URL" || true)
+          [ "$code" = 200 ] && { echo "$URL -> 200"; exit 0; }
+          echo "Attempt $i: $URL -> $code"; sleep 6
+        done
+        echo "::error::Smoke test failed: $URL did not return 200."; exit 1

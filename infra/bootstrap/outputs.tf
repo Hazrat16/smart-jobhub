@@ -27,3 +27,8 @@ output "infra_deployer_role_arn" {
   description = "Role for `terraform apply` on main (GitHub variable AWS_INFRA_DEPLOYER_ROLE_ARN)."
   value       = module.infra_deployer.role_arn
 }
+
+output "deployer_role_arns" {
+  description = "Deploy role per app (GitHub variables AWS_API_DEPLOYER_ROLE_ARN / AWS_WEB_DEPLOYER_ROLE_ARN)."
+  value       = { for app, m in module.deployer : app => m.role_arn }
+}

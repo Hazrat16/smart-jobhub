@@ -1,0 +1,196 @@
+name: deploy-api
+run-name: "deploy api ${{ inputs.version || format('(new from {0})', inputs.branch) }} → ${{ inputs.environment }}"
+
+# Manual, versioned deploys (no deploy on merge):
+#   staging, Version empty   → cut the next api-vN from Branch: build, scan, push, tag, deploy
+#   staging, Version api-vN  → redeploy that existing image
+#   production, Version api-vN → promote the exact image that passed staging (approval required)
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment
+        type: choice
+        options: [staging, production]
+        default: staging
+        required: true
+      version:
+        description: "Version. Staging: leave empty to cut the next api-vN, or enter one to redeploy it. Production: the staging-tested version, e.g. api-v12."
+        type: string
+        required: false
+      branch:
+        description: "Branch to build from (staging new version only)"
+        type: string
+        default: main
+        required: false
+
+permissions:
+  contents: read
+
+# One deploy per app and environment at a time; queued runs wait, never cancel.
+concurrency:
+  group: deploy-api-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  APP: api
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      statuses: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      sha: ${{ steps.release.outputs.sha }}
+      build: ${{ steps.release.outputs.build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: release
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          VERSION: ${{ inputs.version }}
+          BRANCH: ${{ inputs.branch }}
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/resolve-release.sh
+
+  staging:
+    needs: resolve
+    if: inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ vars.APP_URL }}
+    permissions:
+      contents: write # push the version tag
+      statuses: write # record "deploy/staging/<version>" for production to check
+      id-token: write
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      SHA: ${{ needs.resolve.outputs.sha }}
+    steps:
+      # Workflow scripts and actions always come from main. The code being
+      # built comes from the chosen branch, in a separate directory, so a
+      # branch can't change how deploys run.
+      - uses: actions/checkout@v4
+
+      - name: Check out ${{ env.VERSION }} source
+        if: needs.resolve.outputs.build == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+          path: build-src
+          persist-credentials: false
+
+      # Built and scanned before AWS credentials exist in the job.
+      - name: Build image
+        if: needs.resolve.outputs.build == 'true'
+        run: |
+          docker build \
+            --label "org.opencontainers.image.revision=${SHA}" \
+            --label "org.opencontainers.image.version=${VERSION}" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            -t "local/${APP}:${VERSION}" "build-src/apps/${APP}"
+
+      - name: Trivy scan (fail on fixable HIGH/CRITICAL)
+        if: needs.resolve.outputs.build == 'true'
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+          image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+          "local/${APP}:${VERSION}"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_API_DEPLOYER_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Push image and tag the release
+        if: needs.resolve.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ${{ steps.ecr.outputs.registry }}/job-platform-api:${{ env.VERSION }}
+        run: |
+          docker tag "local/${APP}:${VERSION}" "${IMAGE}"
+          docker push "${IMAGE}"
+          # Tag after the image exists. A second run racing for the same number
+          # fails here (the ref already exists), and ECR tags are IMMUTABLE too.
+          gh api "repos/${{ github.repository }}/git/refs" -f ref="refs/tags/${VERSION}" -f sha="${SHA}" --silent
+
+      - name: Check the image exists
+        if: needs.resolve.outputs.build != 'true'
+        run: >-
+          aws ecr describe-images --repository-name "job-platform-${APP}"
+          --image-ids "imageTag=${VERSION}" --query 'imageDetails[0].imageTags' --output text
+
+      - id: deploy
+        uses: ./.github/actions/ecs-deploy
+        with:
+          cluster: job-platform-staging
+          service: job-platform-staging-api
+          image: ${{ steps.ecr.outputs.registry }}/job-platform-api:${{ env.VERSION }}
+          smoke-url: ${{ vars.APP_URL && format('{0}/api/health/ready', vars.APP_URL) || '' }}
+
+      # Only a version that actually ran and passed the smoke test counts.
+      - name: Mark ${{ env.VERSION }} as passed staging
+        if: steps.deploy.outputs.desired-count != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api "repos/${{ github.repository }}/statuses/${SHA}"
+          -f state=success -f context="deploy/staging/${VERSION}"
+          -f description="Deployed to staging and smoke-tested"
+          -f target_url="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - name: Summary
+        run: |
+          echo "### ${VERSION} deployed to staging" >> "$GITHUB_STEP_SUMMARY"
+          echo "Commit \`${SHA}\`. Promote it by running this workflow with environment **production** and version **${VERSION}**." >> "$GITHUB_STEP_SUMMARY"
+
+  production:
+    needs: resolve
+    if: inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    # Required reviewers on this environment gate the job before it starts.
+    environment:
+      name: production
+      url: ${{ vars.APP_URL }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_API_DEPLOYER_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check the image exists
+        run: >-
+          aws ecr describe-images --repository-name "job-platform-${APP}"
+          --image-ids "imageTag=${VERSION}" --query 'imageDetails[0].imageTags' --output text
+
+      # Same image as staging: no rebuild, nothing environment-specific baked in.
+      - uses: ./.github/actions/ecs-deploy
+        with:
+          cluster: job-platform-prod
+          service: job-platform-prod-api
+          image: ${{ steps.ecr.outputs.registry }}/job-platform-api:${{ env.VERSION }}
+          smoke-url: ${{ vars.APP_URL && format('{0}/api/health/ready', vars.APP_URL) || '' }}
+
+      - name: Summary
+        run: echo "### ${VERSION} deployed to production" >> "$GITHUB_STEP_SUMMARY"
