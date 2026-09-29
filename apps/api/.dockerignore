@@ -1,3 +1,14 @@
 node_modules
 dist
+coverage
+.git
+.github
 .env
+.env.*
+!.env.example
+*.md
+tests
+docker-compose*.yml
+Dockerfile*
+Postman*
+*_Postman_Collection.json

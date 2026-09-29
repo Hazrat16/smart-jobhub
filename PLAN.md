@@ -79,7 +79,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - [x] `apps/web/next.config.ts`: remove `productionBrowserSourceMaps: true` (it exposes the source
       publicly; upload source maps to Sentry instead). Add `output: "standalone"` for the Docker image.
       Keep the `/api` rewrite for local dev only.
-- [ ] `apps/web` needs a multi-stage, non-root Dockerfile. (Deferred to Phase 2.)
+- [x] `apps/web` needs a multi-stage, non-root Dockerfile.
 
 - [x] API tests could not run in CI: `src/utils/email.ts` builds the Resend client at import time and throws
       without `RESEND_API_KEY`, and the payment tests got 503 without SSLCommerz credentials. The failed
@@ -92,18 +92,39 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 
 - Path filtering is done inside each workflow (`dorny/paths-filter`) rather than `on.paths`, so the
   required checks `api-ci` and `web-ci` always report and never leave unrelated PRs stuck on "pending".
-- Docker build + Trivy in PR CI are deferred to Phase 2, once the production Dockerfiles exist.
+- Docker build + Trivy in PR CI: added in Phase 2 (`image` job in each workflow).
 - Branch protection (owner, once the workflows have run on GitHub at least once):
   `gh api -X PUT repos/Hazrat16/smart-jobhub/branches/main/protection --input -` with
   `{"required_status_checks":{"strict":true,"contexts":["api-ci","web-ci","analyze"]},
   "enforce_admins":false,"required_pull_request_reviews":{"required_approving_review_count":0},
   "restrictions":null,"allow_force_pushes":false,"allow_deletions":false}`
 
+### Phase 2 notes
+
+- `apps/api/Dockerfile` and `apps/web/Dockerfile` are the production images (default target `production`,
+  non-root `node` user, `node` as PID 1 so SIGTERM reaches graceful shutdown). The api `development`
+  stage is kept for `docker-compose.dev.yml`. `Dockerfile.chat` / `Dockerfile.chat.dev` are now legacy
+  (only the `docker-compose.chat*.yml` files use them); delete them or point those files at `Dockerfile`.
+- **Node 24** (active LTS) everywhere: Node 20 went EOL in April 2026. npm 11 rejected the api lockfile
+  (26 optional platform packages were missing); repaired with `npm install --package-lock-only`, no
+  version changes.
+- The production stage runs `apk upgrade` and deletes npm/npx/corepack/yarn from the base image. Their
+  bundled deps (tar, glob, minimatch, ...) were the Trivy HIGH/CRITICAL findings. Both images scan clean.
+- Web image has no `NEXT_PUBLIC_*` values. `src/lib/socket.ts` now uses the page's own origin outside
+  dev, so Socket.IO goes through the ALB's `/socket.io/*` rule.
+- CI runs Trivy from the pinned `aquasec/trivy` image, not `aquasecurity/trivy-action` (its tags were
+  hijacked in a 2026 supply-chain attack).
+- Verified locally: both images healthy behind an nginx that mimics the ALB path rules
+  (`/`, `/jobs`, `/api/health/ready`, `/api/jobs`, `/socket.io/` all 200).
+- **Open question for Phase 5:** the chat stack uses RabbitMQ (`src/chat/rabbitMQ.ts`, defaults to
+  `amqp://localhost`), but this plan has no RabbitMQ in AWS. Without it the API is healthy but chat
+  messaging is offline. Decide: Amazon MQ, CloudAMQP, or move chat queuing onto Redis/BullMQ.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
        (Workflows and fixes done; waiting on push + branch protection.)
-2. [ ] **Production Dockerfiles** for api and web; both build and run locally.
+2. [x] **Production Dockerfiles** for api and web; both build and run locally.
 3. [ ] **Infra bootstrap** (manual, documented in `infra/BOOTSTRAP.md`): state bucket, OIDC provider, ECR.
 4. [ ] **Staging infra:** network, ALB, ACM, Route 53, ECS services.
 5. [ ] **Data and secrets:** Atlas cluster, Redis, Secrets Manager values populated.

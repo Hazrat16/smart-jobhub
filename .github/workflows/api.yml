@@ -58,7 +58,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: apps/api/package-lock.json
 
@@ -80,9 +80,28 @@ jobs:
       - name: Build
         run: npm run build
 
+  image:
+    needs: changes
+    if: needs.changes.outputs.api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build production image
+        run: docker build -t job-platform-api:${{ github.sha }} apps/api
+
+      # Trivy runs from its pinned image rather than aquasecurity/trivy-action,
+      # whose tags were hijacked in a 2026 supply-chain attack.
+      - name: Trivy scan (fail on fixable HIGH/CRITICAL)
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock
+          aquasec/trivy:0.74.0@sha256:62b1e65e8869bc4b4c6aa4fa2b21595256c7c2f6018a9d9ad61caf87187c1969
+          image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
+          job-platform-api:${{ github.sha }}
+
   # Single required status check for branch protection.
   api-ci:
-    needs: [changes, test]
+    needs: [changes, test, image]
     if: always()
     runs-on: ubuntu-latest
     steps:
