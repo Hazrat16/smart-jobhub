@@ -249,6 +249,22 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - **Follow-ups:** Sentry for the web app (with source maps uploaded to Sentry, not served publicly);
   activate the `Project`/`Environment` cost allocation tags; first restore drill once prod has data.
 
+### Phase 9 notes
+
+- Root `README.md`: live demo + demo logins (placeholders `<your-domain>`, `<DEMO_PASSWORD>`), CI
+  badges, a Mermaid diagram, a "production readiness" table linking to the docs, local setup.
+- `docs/architecture.md` (runtime and delivery diagrams, rendered with mermaid-cli to check them) and
+  `docs/decisions/` with 9 ADRs.
+- Demo data: `apps/api/src/scripts/seedDemo.ts` (`npm run seed:demo`, or
+  `node dist/scripts/seedDemo.js` in the image). Idempotent, and it resets the two demo accounts
+  (password, suspension, jobs, applications, saved jobs, sessions) without touching real users. Tested in
+  `tests/seedDemo.test.ts`. Prod runs it nightly at 03:00 Dhaka via EventBridge Scheduler
+  (`demo_reset_schedule`): a one-off Fargate task on the api's latest task definition; `DEMO_PASSWORD`
+  comes from the api secret.
+- Note: prod uses live SSLCommerz, so the README tells demo visitors not to pay.
+- **Owner:** archive `Hazrat16/job-platform` and `Hazrat16/job-platform-frontend`, with a README line:
+  "Moved to https://github.com/Hazrat16/smart-jobhub (apps/api | apps/web), history preserved."
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
@@ -269,6 +285,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
        an Atlas restore test.
        (Code and docs done; waiting on apply, alert email confirmation, and the first restore drill.)
 9. [ ] **CV polish:** README diagram, badges, live demo and demo login, ADRs.
+       (Done in the repo; waiting on the live URL and demo password in README.md, and archiving the old repos.)
 
 ## Prerequisites the owner must provide
 

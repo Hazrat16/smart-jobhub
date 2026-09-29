@@ -60,7 +60,10 @@ mock_provider "aws" {
   }
 
   mock_resource "aws_ecs_task_definition" {
-    defaults = { arn = "arn:aws:ecs:ap-south-1:123456789012:task-definition/mock:1" }
+    defaults = {
+      arn                  = "arn:aws:ecs:ap-south-1:123456789012:task-definition/mock:1"
+      arn_without_revision = "arn:aws:ecs:ap-south-1:123456789012:task-definition/mock"
+    }
   }
 
   mock_resource "aws_elasticache_replication_group" {
@@ -136,5 +139,10 @@ run "prod_plan" {
   assert {
     condition     = !output.settings.sslcommerz_sandbox
     error_message = "Prod must use live SSLCommerz."
+  }
+
+  assert {
+    condition     = output.settings.demo_reset_schedule == "cron(0 3 * * ? *)"
+    error_message = "Prod hosts the public demo, reset nightly."
   }
 }

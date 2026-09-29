@@ -120,3 +120,12 @@ variable "redis_node_type" {
   type        = string
   default     = "cache.t4g.micro"
 }
+
+variable "demo_reset_schedule" {
+  description = <<-EOT
+    EventBridge Scheduler expression that re-seeds the public demo accounts (apps/api/src/scripts/seedDemo.ts),
+    e.g. "cron(0 3 * * ? *)" in Asia/Dhaka. null = no demo. When set, DEMO_PASSWORD must exist in the api secret.
+  EOT
+  type        = string
+  default     = null
+}

@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
-    "test:unit": "tsx --test tests/*.test.ts"
+    "test:unit": "tsx --test tests/*.test.ts",
+    "seed:demo": "tsx src/scripts/seedDemo.ts"
   },
   "dependencies": {
     "@sentry/node": "^11.0.0",

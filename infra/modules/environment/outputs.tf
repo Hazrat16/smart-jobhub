@@ -45,6 +45,7 @@ output "settings" {
     deletion_protection = var.deletion_protection
     log_retention_days  = var.log_retention_days
     sslcommerz_sandbox  = var.sslcommerz_sandbox
+    demo_reset_schedule = var.demo_reset_schedule
   }
 }
 

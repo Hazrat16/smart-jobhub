@@ -16,4 +16,7 @@ module "env" {
   sslcommerz_sandbox  = false
   deletion_protection = true
   log_retention_days  = 30
+
+  # Public demo logins (README), reset nightly at 03:00 Dhaka. Needs DEMO_PASSWORD in the api secret.
+  demo_reset_schedule = "cron(0 3 * * ? *)"
 }

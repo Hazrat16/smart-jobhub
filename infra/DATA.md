@@ -89,6 +89,9 @@ shred -u /tmp/staging-api.json
   with `ResourceInitializationError: ... did not contain json key`.
 - Use **different** values for staging and prod, especially `JWT_SECRET` and the Mongo user.
 - `REDIS_URL` isn't in this secret. It comes from `/job-platform/<env>/redis`, which Terraform writes.
+- **Prod only:** add `"DEMO_PASSWORD": "<at least 10 chars>"`. It's the public demo login shown in the
+  README; the nightly reset (`demo_reset_schedule`) sets both demo accounts to it. Since it's public,
+  never reuse it anywhere.
 
 Check the keys (not the values) are right:
 

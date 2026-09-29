@@ -100,7 +100,7 @@ module "api" {
   }
 
   secrets = merge(
-    { for k in var.api_secret_keys : k => { arn = module.api_secret.arn, key = k } },
+    { for k in concat(var.api_secret_keys, var.demo_reset_schedule == null ? [] : ["DEMO_PASSWORD"]) : k => { arn = module.api_secret.arn, key = k } },
     { REDIS_URL = { arn = module.redis.secret_arn, key = "REDIS_URL" } },
   )
 

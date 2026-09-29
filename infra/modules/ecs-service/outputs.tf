@@ -27,3 +27,8 @@ output "security_group_id" {
   description = "Task security group."
   value       = aws_security_group.task.id
 }
+
+output "task_definition_arn_without_revision" {
+  description = "Family ARN without a revision: RunTask then uses the latest ACTIVE revision (the deployed one)."
+  value       = aws_ecs_task_definition.this.arn_without_revision
+}
