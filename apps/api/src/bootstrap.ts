@@ -2,8 +2,6 @@ import { createServer } from "http";
 import dns from "dns";
 import mongoose from "mongoose";
 import app, { stopBackgroundJobs } from "./app.js";
-import { ChatConsumer } from "./chat/consumer.js";
-import { closeRabbitMQ, connectRabbitMQ } from "./chat/rabbitMQ.js";
 import { WebSocketService } from "./chat/websocketService.js";
 import { clearWebSocketService, setWebSocketService } from "./chat/websocketRegistry.js";
 import { closeRedis, getRedis } from "./config/redis.js";
@@ -66,8 +64,9 @@ export const startServer = async () => {
       process.env["MONGO_URI"] ||
       "mongodb://localhost:27018/job-platform";
 
-    if (MONGODB_URI.startsWith("mongodb+srv://")) {
+    if (MONGODB_URI.startsWith("mongodb+srv://") && process.env["NODE_ENV"] !== "production") {
       // Public resolvers are often more reliable for SRV records in local dev.
+      // Not in production: there the VPC resolver is the reliable one.
       dns.setServers(["8.8.8.8", "1.1.1.1"]);
     }
 
@@ -88,17 +87,9 @@ export const startServer = async () => {
         wsService = new WebSocketService(httpServer);
         setWebSocketService(wsService);
         console.log("✅ WebSocket service initialized");
-
-        await connectRabbitMQ();
-        console.log("✅ RabbitMQ connected");
-
-        await ChatConsumer.startConsuming();
-        console.log("✅ Chat consumers started");
         chatStackEnabled = true;
       } catch (chatError) {
-        console.error(
-          "⚠️ Chat stack (RabbitMQ/WebSocket/consumer) failed; REST API will still run:",
-        );
+        console.error("⚠️ WebSocket service failed; REST API will still run:");
         console.error(chatError);
       }
     } else {
@@ -113,11 +104,8 @@ export const startServer = async () => {
       );
       if (chatStackEnabled) {
         console.log(`🔌 WebSocket server ready for connections`);
-        console.log(`📡 RabbitMQ consumers active`);
       } else if (mongoConnected) {
-        console.log(
-          `⚠️ MongoDB OK but chat stack offline (start RabbitMQ or set RABBITMQ_URL)`,
-        );
+        console.log(`⚠️ MongoDB OK but the WebSocket service failed to start`);
       } else {
         console.log(`⚠️ Running in degraded mode (no database/chat)`);
       }
@@ -150,7 +138,6 @@ export const startServer = async () => {
           console.log("✅ WebSocket server closed");
         }
 
-        await closeRabbitMQ();
         await stopEmailWorker();
         await closeEmailQueue();
         await closeRedis();

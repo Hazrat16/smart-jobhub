@@ -28,7 +28,6 @@ import mongoose from "mongoose";
 import { logError, logInfo } from "./utils/logger.js";
 import { snapshotMetrics, trackHttp } from "./utils/metrics.js";
 import { pingRedis } from "./config/redis.js";
-import { isRabbitMQConnected } from "./chat/rabbitMQ.js";
 logInfo("app.ts loaded");
 
 const allowedOrigins = getAllowedOrigins();
@@ -126,10 +125,7 @@ app.get("/api/test", (req, res) => {
 
 app.get("/api/health", async (_req, res) => {
   const dbConnected = mongoose.connection.readyState === 1;
-  const [redisConnected, rabbitmqConnected] = await Promise.all([
-    pingRedis(),
-    Promise.resolve(isRabbitMQConnected()),
-  ]);
+  const redisConnected = await pingRedis();
   const status = dbConnected ? "ok" : "degraded";
   res.status(dbConnected ? 200 : 503).json({
     success: dbConnected,
@@ -138,7 +134,6 @@ app.get("/api/health", async (_req, res) => {
       api: "up",
       db: dbConnected ? "up" : "down",
       redis: redisConnected ? "up" : "down",
-      rabbitmq: rabbitmqConnected ? "up" : "down",
     },
     timestamp: new Date().toISOString(),
   });
@@ -153,17 +148,13 @@ app.get("/api/health/ready", async (_req, res) => {
       reason: "Database not connected",
     });
   }
-  const [redisConnected, rabbitmqConnected] = await Promise.all([
-    pingRedis(),
-    Promise.resolve(isRabbitMQConnected()),
-  ]);
+  const redisConnected = await pingRedis();
   return res.json({
     success: true,
     status: "ready",
     services: {
       db: "up",
       redis: redisConnected ? "up" : "down",
-      rabbitmq: rabbitmqConnected ? "up" : "down",
     },
   });
 });

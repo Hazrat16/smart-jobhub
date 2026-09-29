@@ -62,16 +62,16 @@ variable "environment" {
   default     = {}
 }
 
-variable "secret_arn" {
-  description = "Secrets Manager secret holding a JSON object. Required when secret_keys is set."
-  type        = string
-  default     = null
-}
-
-variable "secret_keys" {
-  description = "JSON keys of secret_arn injected as env vars of the same name. Every key must exist in the secret, or the task fails to start."
-  type        = list(string)
-  default     = []
+variable "secrets" {
+  description = <<-EOT
+    Env vars injected from Secrets Manager: env var name => { arn, key }, where key is a JSON key
+    inside that secret. Every key must exist in its secret, or the task fails to start.
+  EOT
+  type = map(object({
+    arn = string
+    key = string
+  }))
+  default = {}
 }
 
 variable "use_spot" {

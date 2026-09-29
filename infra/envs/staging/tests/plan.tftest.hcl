@@ -97,6 +97,11 @@ run "staging_plan" {
   }
 
   assert {
+    condition     = contains(keys(module.api), "security_group_id") && output.redis_endpoint != ""
+    error_message = "Redis must be created and wired to the api."
+  }
+
+  assert {
     condition     = output.services.api.task_definition_family == "job-platform-staging-api"
     error_message = "api task definition family is wrong."
   }

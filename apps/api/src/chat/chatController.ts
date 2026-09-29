@@ -110,6 +110,6 @@ export const getOnlineUsers = async (req: Request, res: Response) => {
     return fail(res, 401, "UNAUTHORIZED", "User not authenticated");
   }
 
-  const onlineUsers = chatService.getOnlineUsers();
+  const onlineUsers = await chatService.getOnlineUsers();
   return ok(res, { onlineUsers }, "Online users loaded");
 };

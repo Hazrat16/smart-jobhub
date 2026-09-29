@@ -51,11 +51,10 @@ variable "web_desired_count" {
 }
 
 variable "api_secret_keys" {
-  description = "Keys of /job-platform/<env>/api that ECS injects. Each key must exist in the secret (an empty string is fine for optional ones)."
+  description = "Keys of /job-platform/<env>/api (filled by hand) that ECS injects. Each key must exist in the secret (an empty string is fine for optional ones). REDIS_URL comes from the Terraform-managed redis secret instead."
   type        = list(string)
   default = [
     "MONGODB_URI",
-    "REDIS_URL",
     "JWT_SECRET",
     "ADMIN_BOOTSTRAP_SECRET",
     "RESEND_API_KEY",

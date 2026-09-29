@@ -1,3 +1,6 @@
+# Local dev stack: API with hot reload + MongoDB + Redis.
+#   docker compose -f docker-compose.dev.yml up --build
+# Values from .env (if present) are used for ${...} below and for other keys via env_file.
 services:
   job-platform-api:
     container_name: job-platform-api-dev
@@ -8,37 +11,36 @@ services:
       target: development
     ports:
       - "5000:5000"
+    env_file:
+      - path: .env
+        required: false
     environment:
       NODE_ENV: development
-      MONGO_URL: mongodb://mongo:27017/job-platform-api
-      RABBITMQ_URL: amqp://rabbitmq:5672
+      MONGODB_URI: mongodb://mongo:27017/job-platform
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret-change-me}
     volumes:
       - .:/app
       - /app/node_modules
     depends_on:
       - mongo
-      - rabbitmq
+      - redis
 
   mongo:
-    image: mongo:5.0
+    image: mongo:7.0
     container_name: mongo-dev
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
 
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: rabbitmq-dev
+  redis:
+    image: redis:7-alpine
+    container_name: redis-dev
+    # BullMQ needs noeviction: an evicted job key would silently lose an email.
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
     ports:
-      - "5672:5672"
-      - "15672:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: admin
-      RABBITMQ_DEFAULT_PASS: admin
-    volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+      - "6379:6379"
 
 volumes:
   mongo-data:
-  rabbitmq-data:

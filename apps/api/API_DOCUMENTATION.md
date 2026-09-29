@@ -307,7 +307,7 @@ file: file (required)
 
 **POST** `/chat`
 
-Send a chat message (requires RabbitMQ).
+Send a chat message. See `CHAT_SERVICE_README.md` for the current chat API.
 
 **Request Body:**
 
@@ -330,9 +330,8 @@ Send a chat message (requires RabbitMQ).
 
 **Features:**
 
-- Message queuing with RabbitMQ
-- Timestamp tracking
-- Asynchronous processing
+- Saved to MongoDB before the response
+- Live delivery over Socket.IO
 
 ---
 
@@ -411,13 +410,13 @@ npm run dev
 PORT=5000
 MONGO_URI=mongodb://localhost:27017/job-platform
 JWT_SECRET=your_jwt_secret_key
-RABBITMQ_URL=amqp://localhost:5672 (optional)
+REDIS_URL=redis://localhost:6379 (optional)
 ```
 
 ### 3. Start Dependencies (Optional)
 
 ```bash
-# Start MongoDB and RabbitMQ with Docker
+# Start MongoDB, Redis and the API with Docker
 docker-compose -f docker-compose.dev.yml up -d
 ```
 
@@ -442,17 +441,6 @@ The API integrates with email services for:
 - Password reset links
 
 **Note:** Email functionality requires proper SMTP configuration in environment variables.
-
----
-
-## 🐰 RabbitMQ Integration
-
-- **Purpose:** Message queuing for chat functionality
-- **Port:** 5672 (default)
-- **Management UI:** http://localhost:15672
-- **Credentials:** admin/admin (development)
-
-**Note:** Chat functionality works without RabbitMQ but messages won't be queued.
 
 ---
 

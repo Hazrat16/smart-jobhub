@@ -39,6 +39,16 @@ module "api_secret" {
   description = "Runtime secrets for the ${var.environment} api (JSON object, one key per env var)."
 }
 
+module "redis" {
+  source = "../../modules/redis"
+
+  name                   = local.name
+  vpc_id                 = module.network.vpc_id
+  subnet_ids             = module.network.public_subnet_ids
+  client_security_groups = { api = module.api.security_group_id }
+  secret_name            = "/${var.project}/${var.environment}/redis"
+}
+
 resource "aws_ecs_cluster" "this" {
   # checkov:skip=CKV_AWS_65:Container Insights is billed per metric; the ALB and service metrics are enough for staging.
   name = local.name
@@ -80,8 +90,10 @@ module "api" {
     SSLCOMMERZ_IS_SANDBOX = tostring(var.sslcommerz_sandbox)
   }
 
-  secret_arn  = module.api_secret.arn
-  secret_keys = var.api_secret_keys
+  secrets = merge(
+    { for k in var.api_secret_keys : k => { arn = module.api_secret.arn, key = k } },
+    { REDIS_URL = { arn = module.redis.secret_arn, key = "REDIS_URL" } },
+  )
 
   depends_on = [aws_ecs_cluster_capacity_providers.this]
 }

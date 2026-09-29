@@ -3,7 +3,6 @@ import { Server as HTTPServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
 import IORedis from "ioredis";
 import jwt from "jsonwebtoken";
-import { ChatProducer } from "./producer.js";
 import Conversation from "../models/conversationModel.js";
 import { getAllowedOrigins } from "../config/corsOrigins.js";
 import { logInfo, logWarnThrottled } from "../utils/logger.js";
@@ -25,7 +24,6 @@ interface ChatRoom {
 
 export class WebSocketService {
   private io: SocketIOServer;
-  private connectedUsers: Map<string, AuthenticatedSocket> = new Map();
   private userRooms: Map<string, Set<string>> = new Map();
   private redisAdapterClients: IORedis[] = [];
 
@@ -108,7 +106,11 @@ export class WebSocketService {
           process.env["JWT_SECRET"] || "fallback_secret",
         ) as { id?: string; role?: string };
         
-        if (decoded.id) socket.userId = decoded.id;
+        if (decoded.id) {
+          socket.userId = decoded.id;
+          // socket.data travels with fetchSockets() across instances (Redis adapter).
+          socket.data.userId = decoded.id;
+        }
         if (decoded.role) socket.userRole = decoded.role;
         
         next();
@@ -137,10 +139,8 @@ export class WebSocketService {
   private handleConnection(socket: AuthenticatedSocket): void {
     if (!socket.userId) return;
 
-    // Add user to connected users map
-    this.connectedUsers.set(socket.userId, socket);
-    
-    // Join user's personal room
+    // Personal room: sendToUser targets it, so delivery works for every tab the
+    // user has open and, through the Redis adapter, on every API task.
     socket.join(`user:${socket.userId}`);
     
     // Send online status to other users
@@ -201,8 +201,8 @@ export class WebSocketService {
       const { receiverId, message, messageType = "text", attachments = [], replyTo } = data;
 
       // Delegates to the same service function the REST /chat/send endpoint uses,
-      // so the two entry points can't drift into different behavior (persistence
-      // via RabbitMQ, best-effort direct delivery to the receiver's live socket).
+      // so the two entry points can't drift into different behavior (durable write
+      // to MongoDB, then best-effort live delivery to the receiver's sockets).
       const result = await chatService.sendMessage({
         senderId: socket.userId,
         receiverId,
@@ -234,10 +234,7 @@ export class WebSocketService {
     try {
       if (!socket.userId) return;
 
-      const { targetUserId, conversationId } = data;
-
-      // Send typing indicator to RabbitMQ
-      ChatProducer.sendTypingIndicator(socket.userId, targetUserId, true);
+      const { conversationId } = data;
 
       // Emit to conversation room
       if (conversationId) {
@@ -259,10 +256,7 @@ export class WebSocketService {
     try {
       if (!socket.userId) return;
 
-      const { targetUserId, conversationId } = data;
-
-      // Send typing indicator to RabbitMQ
-      ChatProducer.sendTypingIndicator(socket.userId, targetUserId, false);
+      const { conversationId } = data;
 
       // Emit to conversation room
       if (conversationId) {
@@ -362,9 +356,6 @@ export class WebSocketService {
 
       console.log(`🔌 User ${socket.userId} disconnected from WebSocket`);
       
-      // Remove from connected users
-      this.connectedUsers.delete(socket.userId);
-      
       // Remove from user rooms
       this.userRooms.delete(socket.userId);
       
@@ -413,9 +404,6 @@ export class WebSocketService {
    */
   private broadcastUserStatus(userId: string, isOnline: boolean): void {
     try {
-      // Send to RabbitMQ
-      ChatProducer.sendUserStatus(userId, isOnline);
-
       // Broadcast to all connected users
       this.io.emit("user_status_change", {
         userId,
@@ -428,14 +416,9 @@ export class WebSocketService {
     }
   }
 
-  /**
-   * Send message to specific user
-   */
+  /** Emits to every socket of a user, on any API task (via the Redis adapter). */
   public sendToUser(userId: string, event: string, data: any): void {
-    const userSocket = this.connectedUsers.get(userId);
-    if (userSocket) {
-      userSocket.emit(event, data);
-    }
+    this.io.to(`user:${userId}`).emit(event, data);
   }
 
   /**
@@ -453,27 +436,17 @@ export class WebSocketService {
   }
 
   /**
-   * Get connected users count
+   * IDs of every user with at least one open socket. fetchSockets() asks every
+   * API task through the Redis adapter, so this is correct with several tasks
+   * (and falls back to this process only when REDIS_URL isn't set).
    */
-  public getConnectedUsersCount(): number {
-    return this.connectedUsers.size;
-  }
-
-  /**
-   * Check if user is connected
-   */
-  public isUserConnected(userId: string): boolean {
-    return this.connectedUsers.has(userId);
-  }
-
-  /**
-   * IDs of every user with an active connection on this instance. In a
-   * horizontally-scaled deployment (Redis adapter enabled) this only reflects
-   * sockets connected to *this* process — there's no cross-instance presence
-   * registry, only cross-instance message/event delivery.
-   */
-  public getConnectedUserIds(): string[] {
-    return Array.from(this.connectedUsers.keys());
+  public async getConnectedUserIds(): Promise<string[]> {
+    const sockets = await this.io.fetchSockets();
+    const ids = new Set<string>();
+    for (const s of sockets) {
+      if (typeof s.data?.userId === "string") ids.add(s.data.userId);
+    }
+    return Array.from(ids);
   }
 
   /** Disconnects all sockets and shuts down the Socket.IO server (for graceful shutdown). */

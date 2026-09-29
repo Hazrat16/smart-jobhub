@@ -1,7 +1,9 @@
 # Staging stack
 
 One VPC (2 public subnets, no NAT), one ALB for `https://<domain_name>`, an ECS cluster with the `api`
-and `web` services on FARGATE_SPOT, and an empty Secrets Manager secret `/job-platform/staging/api`.
+and `web` services on FARGATE_SPOT, a single-node Valkey (Redis) cache reachable only from the api, an
+empty Secrets Manager secret `/job-platform/staging/api` (you fill it in), and
+`/job-platform/staging/redis` (Terraform fills it in). MongoDB is on Atlas; see `infra/DATA.md`.
 
 | Path | Goes to |
 |---|---|
@@ -10,7 +12,8 @@ and `web` services on FARGATE_SPOT, and an empty Secrets Manager secret `/job-pl
 | `http://` | 301 to `https://` |
 
 Rough cost with one task each: ALB ~$18, public IPv4 addresses ~$15 (2 for the ALB, 1 per task), Fargate
-Spot ~$6, Route 53 + Secrets Manager + logs ~$2. About **$40/month**, before Atlas and Redis.
+Spot ~$6, Valkey `cache.t4g.micro` ~$10, Route 53 + Secrets Manager + logs ~$3. About **$50/month**.
+Atlas M0 is free.
 
 ## Before the first plan
 
@@ -35,34 +38,11 @@ Both services start with `desired_count = 0`, so nothing runs yet and nothing fa
 
 ## Fill in the secret (rollout step 5)
 
-ECS injects each key in `api_secret_keys` (in `variables.tf`) as an env var of the same name. **Every
-key must exist in the JSON**, or the task fails to start with `ResourceInitializationError`. Leave optional
-ones as `""`:
+Follow `infra/DATA.md`: create the Atlas cluster and user, then write `/job-platform/staging/api`.
+**Every key in `api_secret_keys` (in `variables.tf`) must exist in the JSON**, even as `""`, or the
+task fails to start. `REDIS_URL` isn't in that list; it comes from the Terraform-managed redis secret.
 
-```bash
-aws secretsmanager put-secret-value --secret-id /job-platform/staging/api \
-  --secret-string file://staging-api-secret.json    # keep the file out of git, delete it afterwards
-```
-
-```json
-{
-  "MONGODB_URI": "mongodb+srv://...",
-  "REDIS_URL": "",
-  "JWT_SECRET": "<64 random chars: openssl rand -hex 32>",
-  "ADMIN_BOOTSTRAP_SECRET": "<random>",
-  "RESEND_API_KEY": "re_...",
-  "CLOUDINARY_CLOUD_NAME": "...",
-  "CLOUDINARY_API_KEY": "...",
-  "CLOUDINARY_API_SECRET": "...",
-  "SSLCOMMERZ_STORE_ID": "...",
-  "SSLCOMMERZ_STORE_PASSWORD": "...",
-  "GROQ_API_KEY": "",
-  "SENTRY_DSN": ""
-}
-```
-
-To add a key: add it to `api_secret_keys` **and** to the secret value *before* merging. Tasks started
-from the new task definition fail if the key is missing.
+To add a key, add it to `api_secret_keys` **and** to the secret value *before* merging.
 
 ## Turning the services on
 

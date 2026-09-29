@@ -18,6 +18,11 @@ output "api_secret_name" {
   value       = module.api_secret.name
 }
 
+output "redis_endpoint" {
+  description = "Valkey primary endpoint (TLS, AUTH token in the redis secret)."
+  value       = module.redis.primary_endpoint
+}
+
 output "services" {
   description = "Per-app values the CD workflows need."
   value = {

@@ -9,7 +9,7 @@ a laptop, with an admin's credentials. After that, CI does all Terraform work th
 | OIDC provider | `token.actions.githubusercontent.com` | Lets GitHub Actions get short-lived AWS credentials. No static keys. |
 | ECR repos | `job-platform-api`, `job-platform-web` | IMMUTABLE tags, scan on push, untagged images expire after 7 days, last 50 tagged images kept. |
 | IAM policy | `/job-platform/job-platform-workload-boundary` | Permissions boundary that every role created by the env stacks must carry. |
-| IAM role | `/job-platform-ci/job-platform-infra-planner` | `terraform plan` on PRs. ReadOnlyAccess + state read + lock. |
+| IAM role | `/job-platform-ci/job-platform-infra-planner` | `terraform plan` on PRs. ReadOnlyAccess + state read + lock + read of the Terraform-generated `/job-platform/*/redis` secrets (already in state). |
 | IAM role | `/job-platform-ci/job-platform-infra-deployer` | `terraform apply` on `main`. PowerUserAccess + IAM limited to `/job-platform/` and the boundary. |
 
 The `api-deployer` and `web-deployer` roles are created with the CD workflows (rollout step 6), in the

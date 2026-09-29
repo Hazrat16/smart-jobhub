@@ -18,6 +18,7 @@ Status is tracked in the checklist at the bottom.
   - This means the browser uses same-origin `/api`, so `NEXT_PUBLIC_API_URL` stays unset. **One web
     image works for every environment**, which gives us build once, promote everywhere, and no CORS.
 - **Data:** MongoDB **Atlas** (AWS Mumbai, backups on). Redis on **ElastiCache or Upstash**.
+  *(Step 5: ElastiCache Valkey `cache.t4g.micro` per env; Atlas M0 for staging, Flex for prod.)*
 - **Images:** ECR, **IMMUTABLE** tags, one repo per app (`job-platform-api`, `job-platform-web`), tagged with the git SHA.
 - **CI → AWS auth: GitHub OIDC only, no static keys.** Three roles:
   `infra-deployer`, `api-deployer`, `web-deployer`. Trust is scoped by `job_workflow_ref` plus the
@@ -116,9 +117,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
   hijacked in a 2026 supply-chain attack).
 - Verified locally: both images healthy behind an nginx that mimics the ALB path rules
   (`/`, `/jobs`, `/api/health/ready`, `/api/jobs`, `/socket.io/` all 200).
-- **Open question for Phase 5:** the chat stack uses RabbitMQ (`src/chat/rabbitMQ.ts`, defaults to
-  `amqp://localhost`), but this plan has no RabbitMQ in AWS. Without it the API is healthy but chat
-  messaging is offline. Decide: Amazon MQ, CloudAMQP, or move chat queuing onto Redis/BullMQ.
+- ~~Open question: RabbitMQ has no place in AWS.~~ Resolved in Phase 5: RabbitMQ was removed.
 
 ### Phase 3 notes
 
@@ -157,6 +156,35 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - Fixed a Phase 1 bug that actionlint found: `paths-ignore` isn't a valid CodeQL init input; it now
   goes in `config`.
 
+### Phase 5 notes
+
+- **RabbitMQ removed.** Chat already saved every message and read state directly to MongoDB, and the
+  RabbitMQ consumers only logged or repeated those writes. Without a broker, every typing indicator and
+  connect/disconnect tried to open a new AMQP connection (error spam, Sentry noise). Amazon MQ or
+  CloudAMQP would have cost ~$20–30/month for nothing. Deleted `chat/{rabbitMQ,producer,consumer}.ts`,
+  `amqplib`, the three `docker-compose.chat*.yml`, `Dockerfile.chat*`, `env.chat.example`, the two chat
+  start scripts, and the three docs that described that stack. `docker-compose.dev.yml` is now the one
+  local stack (api + Mongo 7 + Redis), and it now sets `MONGODB_URI` (it used to set `MONGO_URL`, which
+  nothing reads).
+- **Chat fixed for more than one task:** `sendToUser` emits to the `user:<id>` room (through the Redis
+  adapter, to every tab and every task), and `online-users` uses `fetchSockets()` across tasks. Before,
+  both only saw sockets on the same task. `tests/chatRealtime.test.ts` runs two Socket.IO servers on one
+  Redis and fails against the old code; API CI now has a Redis service for it.
+- **Redis:** `modules/redis`, ElastiCache Valkey 8, single node, TLS + 64-char AUTH token,
+  `maxmemory-policy noeviction` (BullMQ), ingress from the api SG only. Terraform writes `REDIS_URL` to
+  `/job-platform/<env>/redis`. `ecs-service` now takes `secrets = { ENV = { arn, key } }` so one task
+  can read several secrets. The planner may read the redis secret (it already reads state, which holds it).
+- **Atlas by hand** (`infra/DATA.md`): one project per env, M0 staging / Flex prod, AWS Mumbai,
+  `readWrite` on one DB. IP access list is `0.0.0.0/0` because Fargate IPs change and there's no NAT;
+  mitigated by TLS-only, per-env users and strong passwords. PrivateLink needs M10+.
+- API: the `dns.setServers(8.8.8.8, 1.1.1.1)` workaround for `mongodb+srv` now applies to local dev only.
+- **Follow-up:** read-only root filesystem for tasks (checkov CKV_AWS_336, skipped). It needs writable
+  volumes for `/tmp` and `.next/cache`, verified on Fargate for the non-root user.
+- **Cost check:** staging ≈ $50/month. Prod will be about $60–70 on-demand, plus Atlas Flex ($8–30).
+  Total ≈ $120–150, **above the $70–110 target**. The biggest levers: run staging only when needed
+  (desired count 0 plus a scheduled scale-down), share one ALB for both envs via host rules (−$18), or
+  stay on M0/free Redis for staging.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
@@ -167,6 +195,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 4. [ ] **Staging infra:** network, ALB, ACM, Route 53, ECS services.
        (Code done and tested with a mocked provider; waiting on bootstrap + domain in `terraform.tfvars`.)
 5. [ ] **Data and secrets:** Atlas cluster, Redis, Secrets Manager values populated.
+       (Redis in Terraform, Atlas + secret values documented in `infra/DATA.md`; waiting on the owner.)
 6. [ ] **CD workflows:** merge to `main` deploys to staging automatically.
 7. [ ] **Prod:** approval gate, autoscaling, circuit breaker.
 8. [ ] **Operations:** CloudWatch alarms → SNS, AWS Budgets alert, Sentry releases, `docs/runbook.md`,

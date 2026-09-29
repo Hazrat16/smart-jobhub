@@ -91,6 +91,14 @@ data "aws_iam_policy_document" "planner_state" {
     resources = ["${aws_s3_bucket.tfstate.arn}/*"]
   }
 
+  # Refreshing Terraform-managed secret versions (the generated REDIS_URL) needs
+  # the value. That grants nothing new: the planner reads state, which holds it.
+  statement {
+    sid       = "RefreshManagedSecrets"
+    actions   = ["secretsmanager:GetSecretValue"]
+    resources = ["arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:/${var.project}/*/redis-*"]
+  }
+
   # `plan` takes the S3 native lock, which is a .tflock object next to the state.
   statement {
     sid       = "Lock"

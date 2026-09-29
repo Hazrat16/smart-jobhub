@@ -1,9 +1,9 @@
 data "aws_region" "current" {}
 
 locals {
-  # Decided from the static key list, not the ARN: the ARN is unknown until
-  # the secret exists, and count must be known at plan time.
-  has_secret = length(var.secret_keys) > 0
+  # Decided from the map's keys, not the ARNs: ARNs are unknown until the
+  # secrets exist, and count must be known at plan time.
+  has_secret = length(var.secrets) > 0
 }
 
 # ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ data "aws_iam_policy_document" "read_secret" {
 
   statement {
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.secret_arn]
+    resources = distinct([for s in values(var.secrets) : s.arn])
   }
 }
 
@@ -74,6 +74,7 @@ resource "aws_iam_role" "task" {
 # ---------------------------------------------------------------------------
 
 resource "aws_ecs_task_definition" "this" {
+  # checkov:skip=CKV_AWS_336:Follow-up: read-only rootfs needs writable volumes for /tmp and .next/cache; verify their ownership on Fargate for the non-root user first.
   family                   = var.name
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
@@ -96,7 +97,7 @@ resource "aws_ecs_task_definition" "this" {
       portMappings = [{ containerPort = var.container_port, protocol = "tcp" }]
 
       environment = [for k, v in var.environment : { name = k, value = v }]
-      secrets     = [for k in var.secret_keys : { name = k, valueFrom = "${var.secret_arn}:${k}::" }]
+      secrets     = [for name, s in var.secrets : { name = name, valueFrom = "${s.arn}:${s.key}::" }]
 
       readonlyRootFilesystem = false
       linuxParameters        = { initProcessEnabled = true }
@@ -112,13 +113,6 @@ resource "aws_ecs_task_definition" "this" {
       }
     }
   ])
-
-  lifecycle {
-    precondition {
-      condition     = length(var.secret_keys) == 0 || var.secret_arn != null
-      error_message = "secret_keys needs secret_arn."
-    }
-  }
 }
 
 # ---------------------------------------------------------------------------

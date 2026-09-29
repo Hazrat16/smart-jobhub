@@ -12,9 +12,10 @@ built on Node.js, TypeScript, Express 5, and MongoDB.
   background email queue (BullMQ), and a Socket.IO Redis adapter for horizontal
   chat scaling — all with automatic fallback to in-process behavior when Redis
   isn't configured, so nothing hard-depends on it.
-- **Real-time chat**: Socket.IO + RabbitMQ, with direct-to-socket delivery on top
-  of async persistence, verified end-to-end (message send → live delivery →
-  database persistence → REST history retrieval).
+- **Real-time chat**: Socket.IO with a durable MongoDB write first and live
+  delivery on top, fanned out across API tasks by the Redis adapter, verified
+  end-to-end (message send → live delivery → database persistence → REST
+  history retrieval).
 - **Paid job boosting**: employers can feature a job post for a fixed number of
   days via SSLCommerz; pricing is computed server-side, never trusted from the
   client, and boosted listings are sorted first via a MongoDB aggregation pipeline.
@@ -25,14 +26,14 @@ built on Node.js, TypeScript, Express 5, and MongoDB.
   payment-validation flows, including regression tests that lock in specific
   security fixes (e.g. mass-assignment protection on job create/update).
 - **Operationally real**: structured JSON logging, `/api/health` and
-  `/api/health/ready` checks covering Mongo/Redis/RabbitMQ, graceful shutdown that
+  `/api/health/ready` checks covering Mongo/Redis, graceful shutdown that
   actually drains every subsystem, optional Sentry error tracking, and a CI
   pipeline that runs typecheck/lint/test/build/`npm audit` on every push.
 
 ## Tech stack
 
 Node.js · TypeScript · Express 5 · MongoDB/Mongoose · Redis (ioredis) · BullMQ ·
-Socket.IO · RabbitMQ (amqplib) · JWT auth · SSLCommerz · Cloudinary · Sentry ·
+Socket.IO · JWT auth · SSLCommerz · Cloudinary · Sentry ·
 Docker · GitHub Actions
 
 ## Getting started
@@ -43,7 +44,7 @@ cp .env.example .env   # fill in MONGODB_URI and JWT_SECRET at minimum
 npm run dev
 ```
 
-The server starts in degraded mode if MongoDB/Redis/RabbitMQ aren't reachable —
+The server starts in degraded mode if MongoDB or Redis isn't reachable —
 the REST API still runs, chat/caching/queueing just fall back to simpler behavior.
 See `.env.example` for what each integration unlocks.
 
@@ -59,12 +60,12 @@ npm test
 ### Running the full stack with Docker
 
 ```bash
-docker compose -f docker-compose.chat.yml up --build
+docker compose -f docker-compose.dev.yml up --build
 ```
 
-Spins up MongoDB, RabbitMQ, Redis, the API, and an nginx reverse proxy together.
-See `DOCKER_README.md` for other compose variants and `QUICK_START.md` for a
-minimal setup.
+Starts MongoDB, Redis and the API with hot reload (the `development` stage of the
+`Dockerfile`). The production image is the default `Dockerfile` target:
+`docker build -t job-platform-api .`
 
 ## Architecture
 
@@ -77,7 +78,7 @@ minimal setup.
 - `src/models/` — Mongoose schemas.
 - `src/middlewares/` — auth, RBAC, rate limiting, input sanitization, error handling.
 - `src/queues/` — BullMQ producers/workers (currently: background email delivery).
-- `src/chat/` — Socket.IO service, RabbitMQ producer/consumer for chat.
+- `src/chat/` — Socket.IO service (rooms, events, Redis adapter) and chat REST handlers.
 - `src/config/` — Redis client, CORS origins, Sentry, Cloudinary — each reads env
   vars lazily (not at module load) since ESM import hoisting can otherwise
   evaluate a module before `dotenv.config()` has run.
@@ -89,6 +90,4 @@ minimal setup.
 ## API documentation
 
 - [`API_DOCUMENTATION.md`](./API_DOCUMENTATION.md) — REST endpoints.
-- [`CHAT_SERVICE_README.md`](./CHAT_SERVICE_README.md) /
-  [`CHAT_SERVICE_TUTORIAL.md`](./CHAT_SERVICE_TUTORIAL.md) — chat subsystem detail.
-- [`DOCKER_README.md`](./DOCKER_README.md) — Docker Compose variants explained.
+- [`CHAT_SERVICE_README.md`](./CHAT_SERVICE_README.md) — chat subsystem detail.

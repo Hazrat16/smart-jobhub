@@ -1,11 +1,9 @@
 import mongoose from "mongoose";
 import { getWebSocketService } from "../chat/websocketRegistry.js";
-import { ChatProducer } from "../chat/producer.js";
 import ChatMessage, { type IChatMessage } from "../models/chatModel.js";
 import Conversation from "../models/conversationModel.js";
 import User from "../models/userModel.js";
 import { HttpError } from "../utils/http.js";
-import { logWarn } from "../utils/logger.js";
 
 /** Escapes regex metacharacters so a user's search text is matched literally —
  * passing it straight into `$regex` would let a crafted pattern (e.g. catastrophic
@@ -27,12 +25,8 @@ export type SendChatMessageInput = {
  * Shared by both the REST endpoint and the `send_message` socket event, so the two
  * entry points can't drift into different behavior.
  *
- * The message is persisted directly here rather than relying on the RabbitMQ
- * consumer (chat/consumer.ts) to save it — a request that answers "sent" must not
- * depend on a message broker being reachable (bootstrap.ts explicitly keeps the
- * REST API running even when the chat broker fails to connect, and this function
- * needs to honor that). RabbitMQ/WebSocket delivery below is best-effort fanout on
- * top of the already-durable write, never a reason to fail the request.
+ * The message is persisted directly here, and live delivery over Socket.IO below
+ * is best-effort on top of that durable write, never a reason to fail the request.
  */
 export async function sendMessage(input: SendChatMessageInput) {
   if (!input.receiverId || !input.message) {
@@ -64,17 +58,6 @@ export async function sendMessage(input: SendChatMessageInput) {
   conversation.lastMessageAt = timestamp;
   conversation.incrementUnreadCount(new mongoose.Types.ObjectId(input.receiverId));
   await conversation.save();
-
-  ChatProducer.publishEvent({
-    type: "message_sent",
-    userId: input.senderId,
-    targetUserId: input.receiverId,
-    conversationId: String(conversation._id),
-    data: { messageId: String(saved._id) },
-    timestamp,
-  }).catch((err) => {
-    logWarn("chat_publish_event_failed", { event: "message_sent", error: String(err) });
-  });
 
   getWebSocketService()?.sendToUser(input.receiverId, "new_message", {
     clientMessageId,
@@ -263,18 +246,6 @@ export async function markMessagesAsRead(
       await conversation.save();
     }
   }
-
-  // Best-effort — the read state above is already durably saved; a broker outage
-  // must never fail this request (see the comment on sendMessage).
-  ChatProducer.publishEvent({
-    type: "message_read",
-    userId,
-    targetUserId: senderId,
-    ...(conversationId ? { conversationId } : {}),
-    timestamp: new Date(),
-  }).catch((err) => {
-    logWarn("chat_publish_event_failed", { event: "message_read", error: String(err) });
-  });
 }
 
 async function loadOwnedMessage(userId: string, messageId: string | undefined) {
@@ -314,8 +285,7 @@ export async function editMessage(
   return message;
 }
 
-/** Reflects presence on this process only — see getConnectedUserIds's own caveat
- * about horizontally-scaled deployments. */
-export function getOnlineUsers(): string[] {
-  return getWebSocketService()?.getConnectedUserIds() ?? [];
+/** Users with an open socket on any API task (see getConnectedUserIds). */
+export async function getOnlineUsers(): Promise<string[]> {
+  return (await getWebSocketService()?.getConnectedUserIds()) ?? [];
 }

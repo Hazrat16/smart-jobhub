@@ -27,9 +27,12 @@ variables {
   container_port           = 5000
   permissions_boundary_arn = "arn:aws:iam::123456789012:policy/job-platform/job-platform-workload-boundary"
   environment              = { NODE_ENV = "production", TRUST_PROXY_HOPS = "1" }
-  secret_arn               = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:/job-platform/staging/api-AbCdEf"
-  secret_keys              = ["MONGODB_URI", "JWT_SECRET"]
-  use_spot                 = true
+  secrets = {
+    MONGODB_URI = { arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:/job-platform/staging/api-AbCdEf", key = "MONGODB_URI" }
+    JWT_SECRET  = { arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:/job-platform/staging/api-AbCdEf", key = "JWT_SECRET" }
+    REDIS_URL   = { arn = "arn:aws:secretsmanager:ap-south-1:123456789012:secret:/job-platform/staging/redis-GhIjKl", key = "REDIS_URL" }
+  }
+  use_spot = true
 }
 
 run "with_secrets" {
@@ -47,10 +50,10 @@ run "with_secrets" {
 
   assert {
     condition = (
-      jsondecode(aws_ecs_task_definition.this.container_definitions)[0].secrets
-      == [for k in var.secret_keys : { name = k, valueFrom = "${var.secret_arn}:${k}::" }]
+      toset(jsondecode(aws_ecs_task_definition.this.container_definitions)[0].secrets)
+      == toset([for name, s in var.secrets : { name = name, valueFrom = "${s.arn}:${s.key}::" }])
     )
-    error_message = "Each secret key must be injected from its JSON key in Secrets Manager."
+    error_message = "Each secret must be injected from its JSON key in its Secrets Manager secret."
   }
 
   assert {
@@ -83,10 +86,9 @@ run "without_secrets" {
   command = apply
 
   variables {
-    name        = "job-platform-staging-web"
-    secret_arn  = null
-    secret_keys = []
-    use_spot    = false
+    name     = "job-platform-staging-web"
+    secrets  = {}
+    use_spot = false
   }
 
   assert {

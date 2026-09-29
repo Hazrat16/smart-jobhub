@@ -31,11 +31,10 @@ export async function setupTestApp(dbName: string) {
 
   // Deleted *after* importing app code: other modules (config/cloudinary.ts,
   // utils/email.ts) call the bare dotenv.config() as a side effect of that import,
-  // which would otherwise re-populate these from the developer's real .env, since
+  // which would otherwise re-populate it from the developer's real .env, since
   // dotenv fills in only currently-unset vars. Tests must never attempt a real
-  // Redis/RabbitMQ connection — both fall back to in-process behavior when unset.
+  // Redis connection — it falls back to in-process behavior when unset.
   delete process.env["REDIS_URL"];
-  delete process.env["RABBITMQ_URL"];
 
   return { app: appModule.default, stopBackgroundJobs: appModule.stopBackgroundJobs, mongoose };
 }

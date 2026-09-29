@@ -16,7 +16,6 @@
     "@sentry/node": "^11.0.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@types/socket.io": "^3.0.2",
-    "amqplib": "^0.10.8",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.56.0",
     "cloudinary": "^2.11.0",
@@ -34,7 +33,6 @@
     "socket.io": "^4.8.1"
   },
   "devDependencies": {
-    "@types/amqplib": "^0.10.7",
     "@types/bcryptjs": "^3.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",

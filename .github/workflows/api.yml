@@ -49,10 +49,21 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     env:
       # The test helper reads TEST_MONGODB_URI (not MONGO_URI) and unsets
-      # REDIS_URL, so no Redis service is needed.
+      # REDIS_URL. Redis is used only by the cross-task chat test, through
+      # TEST_REDIS_URL, standing in for two API tasks sharing an adapter.
       TEST_MONGODB_URI: mongodb://127.0.0.1:27017/job-platform-test
+      TEST_REDIS_URL: redis://127.0.0.1:6379
     steps:
       - uses: actions/checkout@v4
 
