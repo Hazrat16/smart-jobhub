@@ -7,12 +7,12 @@ see" checks.
 
 Every step starts with a label that tells you where to do it:
 
-| Label | Where | What it means |
-|---|---|---|
-| 💻 **Terminal** | Your EC2 work machine (the one you SSH into) | Type the commands there |
+| Label            | Where                                         | What it means                                                         |
+| ---------------- | --------------------------------------------- | --------------------------------------------------------------------- |
+| 💻 **Terminal**  | Your EC2 work machine (the one you SSH into)  | Type the commands there                                               |
 | 📝 **Edit file** | A file in `~/smart-jobhub` on the EC2 machine | Open it with `nano` (or VS Code Remote-SSH, see step 0) and change it |
-| 🌐 **Website** | A website in your browser | AWS console, GitHub, Atlas, Resend, your domain registrar |
-| 📧 **Email** | Your inbox | Click a link that was sent to you |
+| 🌐 **Website**   | A website in your browser                     | AWS console, GitHub, Atlas, Resend, your domain registrar             |
+| 📧 **Email**     | Your inbox                                    | Click a link that was sent to you                                     |
 
 **Every time you open a new terminal** for this guide, run these two lines first:
 
@@ -27,11 +27,11 @@ where you've run these two lines.
 
 **Replace these everywhere** you see them:
 
-| Write this | Instead of |
-|---|---|
-| the email that should get alerts | `<alert-email>` |
+| Write this                                                                           | Instead of      |
+| ------------------------------------------------------------------------------------ | --------------- |
+| the email that should get alerts                                                     | `<alert-email>` |
 | staging's address, e.g. `https://d1abc234xyz.cloudfront.net` (you get it in step 14) | `<staging-url>` |
-| production's address (you get it in step 23) | `<prod-url>` |
+| production's address (you get it in step 23)                                         | `<prod-url>`    |
 
 > **No domain needed.** Each environment gets a free HTTPS address from AWS CloudFront, like
 > `https://d1abc234xyz.cloudfront.net`. You can add your own domain later ("Later: add a domain" at
@@ -50,10 +50,11 @@ You run everything from your EC2 machine, not your laptop. That's fine, but the 
 own copy of the project, because the files on your laptop aren't there.
 
 **How to edit files on it:**
+
 - **`nano`** (simplest): `nano path/to/file` opens the file. Edit it, then press **Ctrl+O** and
   **Enter** to save, and **Ctrl+X** to quit.
 - **or VS Code Remote-SSH** (nicer): in VS Code on your laptop, install the **Remote - SSH** extension,
-  then *Remote-SSH: Connect to Host…* → `ubuntu@<your-ec2-address>` → *Open Folder* →
+  then _Remote-SSH: Connect to Host…_ → `ubuntu@<your-ec2-address>` → _Open Folder_ →
   `/home/ubuntu/smart-jobhub`. VS Code then edits the files **on the EC2 machine** directly.
 
 The project is copied onto the EC2 machine at the end of step 2 (it needs the GitHub login first).
@@ -72,7 +73,7 @@ Sign up for each of these (free unless noted):
 - [ ] **Resend**: https://resend.com (sends emails)
 - [ ] **Cloudinary**: https://cloudinary.com (stores uploaded photos and resumes)
 - [ ] **SSLCommerz sandbox**: https://developer.sslcommerz.com (test payments)
-- [ ] *(optional)* **Groq**: https://console.groq.com (AI resume analyzer)
+- [ ] _(optional)_ **Groq**: https://console.groq.com (AI resume analyzer)
 
 ## Step 2. Install the tools
 
@@ -101,17 +102,17 @@ Don't use `gh auth login`'s browser option: it can't leave organizations out.
 
 🌐 **Website:** https://github.com/settings/personal-access-tokens/new
 
-| Field | Value |
-|---|---|
-| Token name | `smart-jobhub setup` |
-| Resource owner | **Hazrat16** (your own account, not an organization) |
-| Expiration | 30 days (make a new one when it expires) |
+| Field             | Value                                                  |
+| ----------------- | ------------------------------------------------------ |
+| Token name        | `smart-jobhub setup`                                   |
+| Resource owner    | **Hazrat16** (your own account, not an organization)   |
+| Expiration        | 30 days (make a new one when it expires)               |
 | Repository access | **Only select repositories** → `Hazrat16/smart-jobhub` |
 
 Under **Repository permissions**, set these to **Read and write**:
 **Actions, Administration, Contents, Environments, Pull requests, Variables, Workflows**.
 Set **Commit statuses** to **Read-only**. (**Metadata** is read-only automatically.) Leave everything
-else as *No access*, and leave **Account permissions** empty.
+else as _No access_, and leave **Account permissions** empty.
 
 Click **Generate token** and copy it (`github_pat_...`).
 
@@ -149,15 +150,15 @@ gh auth status       # Logged in to github.com account Hazrat16
 1. [ ] Top right → your name → **Security credentials** → **Assign MFA device**. Set up an
        authenticator app.
 2. [ ] Search for **IAM** → **Users** → **Create user**:
-       - User name: `admin`
-       - Tick **Provide user access to the AWS Management Console**
-       - Next → **Attach policies directly** → tick **AdministratorAccess** → Create
+   - User name: `admin`
+   - Tick **Provide user access to the AWS Management Console**
+   - Next → **Attach policies directly** → tick **AdministratorAccess** → Create
 3. [ ] Sign out, then sign in again as the **`admin`** user (the sign-in URL is on the page you just
        saw). Use `admin` from now on, never root.
 4. [ ] IAM → Users → **admin** → **Security credentials**:
-       - **Assign MFA device** (for admin too)
-       - **Create access key** → choose **Command Line Interface (CLI)** → copy the **Access key**
-         and the **Secret access key**
+   - **Assign MFA device** (for admin too)
+   - **Create access key** → choose **Command Line Interface (CLI)** → copy the **Access key**
+     and the **Secret access key**
 
 ## Step 4. Connect your terminal to AWS
 
@@ -206,7 +207,7 @@ If there are no runs yet, 💻 start them with an empty commit from a ready term
 `git commit --allow-empty -m "ci: first run" && git push origin main`.
 
 ✅ **You should see** 4 runs (`api`, `web`, `infra`, `codeql`) turn **green**. Some jobs show as
-*skipped*; that's normal for now.
+_skipped_; that's normal for now.
 
 ## Step 7. GitHub settings
 
@@ -231,21 +232,6 @@ gh api -X PUT repos/Hazrat16/smart-jobhub/actions/oidc/customization/sub --input
 EOF
 ```
 
-Then save the repo's OIDC identity for step 9. GitHub may name the repo by its ID numbers in its tokens
-(`Hazrat16@54895423/smart-jobhub@1393997882`), and the AWS roles need to know that:
-
-```bash
-IDS=$(gh api repos/Hazrat16/smart-jobhub/actions/oidc/customization/sub --jq '.sub_claim_prefix // ""' | sed 's/^repo://')
-echo "$IDS"
-[ -n "$IDS" ] && [ "$IDS" != "Hazrat16/smart-jobhub" ] && \
-  echo "github_repo_ids = \"$IDS\"" >> infra/bootstrap/terraform.tfvars
-tail -2 infra/bootstrap/terraform.tfvars
-```
-
-If it prints something like `Hazrat16@54895423/smart-jobhub@1393997882`, the last line of
-`infra/bootstrap/terraform.tfvars` is now `github_repo_ids = "…"`. If it prints `Hazrat16/smart-jobhub`
-or nothing, no line is added; that's fine too.
-
 **7c. Create the `staging` and `production` environments** (production waits for your approval):
 
 ```bash
@@ -257,6 +243,7 @@ EOF
 ```
 
 ✅ **You should see,** 🌐 on GitHub → your repo → **Settings**:
+
 - **Branches:** a rule for `main`
 - **Environments:** `staging`, and `production` with you as the reviewer
 
@@ -427,8 +414,8 @@ Without this, alerts aren't delivered.
 2. [ ] **Create cluster** → **M0 (Free)** → provider **AWS** → region **Mumbai (ap-south-1)** → name
        it `staging`.
 3. [ ] **Database Access → Add New Database User:**
-       - Username `api`, and click **Autogenerate Secure Password** (copy it)
-       - **Specific Privileges → readWrite** on database **`job-platform`**
+   - Username `api`, and click **Autogenerate Secure Password** (copy it)
+   - **Specific Privileges → readWrite** on database **`job-platform`**
 4. [ ] **Network Access → Add IP Address → Allow access from anywhere** (`0.0.0.0/0`).
 5. [ ] **Connect → Drivers** → copy the connection string. Put in your password, and add
        `job-platform` after `.net/`, so it looks like this:
@@ -481,12 +468,12 @@ shred -u /tmp/staging-api.json
 
 🌐 **Website:** GitHub → **Actions** → **deploy-api** (left side) → **Run workflow**:
 
-| Field | Value |
-|---|---|
-| Use workflow from | `main` |
-| Environment | `staging` |
-| Version | *(leave empty)* |
-| Branch | `main` |
+| Field             | Value           |
+| ----------------- | --------------- |
+| Use workflow from | `main`          |
+| Environment       | `staging`       |
+| Version           | _(leave empty)_ |
+| Branch            | `main`          |
 
 Click **Run workflow**. Then do the same with **deploy-web**.
 
@@ -550,11 +537,11 @@ aws logs tail /ecs/job-platform-staging-api --since 5m | grep demo_seeded
 
 ✅ **You should see** `"users":9,"jobs":14`. You can now log in with your `DEMO_PASSWORD` as:
 
-| Role | Emails (all end in `@smartjobhub.test`) |
-|---|---|
+| Role      | Emails (all end in `@smartjobhub.test`)                       |
+| --------- | ------------------------------------------------------------- |
 | Jobseeker | `demo.jobseeker`, `nusrat.jahan`, `rafi.ahmed`, `sadia.islam` |
-| Employer | `demo.employer`, `farhana.rahman`, `tanvir.hasan` |
-| Admin | `admin`, with `SEED_ADMIN_PASSWORD` |
+| Employer  | `demo.employer`, `farhana.rahman`, `tanvir.hasan`             |
+| Admin     | `admin`, with `SEED_ADMIN_PASSWORD`                           |
 
 ## Step 22. Try staging
 
@@ -629,6 +616,7 @@ nano /tmp/prod-api.json
 ```
 
 **25b.** 📝 **Edit file:** replace the `PASTE…` values and save.
+
 - `SSLCOMMERZ_*` are your **live** store's details. No live store yet? See "Common problems".
 - `DEMO_PASSWORD` is the public demo login shown in the README. Use a password you use nowhere else.
 
@@ -703,7 +691,7 @@ aws logs tail /ecs/job-platform-prod-api --since 5m | grep demo_seeded
 
 🌐 **Website:** GitHub → Actions
 
-1. **deploy-api** → environment `staging`, version *empty*. This creates `api-v2` on staging.
+1. **deploy-api** → environment `staging`, version _empty_. This creates `api-v2` on staging.
 2. Test it on `<staging-url>`.
 3. **deploy-api** → environment `production`, version `api-v2` → approve. It's live.
 
@@ -716,11 +704,12 @@ production. More in `docs/releasing.md`.
 
 ```bash
 cd infra/envs/staging
-terraform init -backend-config="bucket=$(gh api repos/Hazrat16/smart-jobhub/actions/variables/TF_STATE_BUCKET --jq .value)"
+terraform init -backend-config="bucket=$(gh variable get TF_STATE_BUCKET)"
 terraform destroy
 ```
 
 For production:
+
 1. 📝 In `infra/envs/prod/main.tf`, change `deletion_protection = true` to `false`.
 2. 💻 In `infra/envs/prod`, run the same `terraform init`, then `terraform apply`, then
    `terraform destroy`.
@@ -752,25 +741,24 @@ When you buy one (it's only $3–15 a year):
 
 # Common problems
 
-| You see | Do this |
-|---|---|
-| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Open the failed job: the **Show OIDC claims** step prints the token's `sub`. Check that step 7b's `github_repo_ids` line matches it, then run `terraform apply` in `infra/bootstrap` again (step 9). Always run workflows from `main`. |
-| GitHub infra jobs are all *skipped* | The variables from step 11 are missing: check `gh variable list`. |
-| `no matching Route 53 Hosted Zone` | A `terraform.tfvars` has `zone_name` / `domain_name` uncommented without a real domain. Comment them out again. |
-| `403 Forbidden` from an `...elb.amazonaws.com` address | Expected: the load balancer only answers CloudFront. Use your `<staging-url>` / `<prod-url>`. |
-| The CloudFront address doesn't answer yet | Wait 5–10 minutes after `apply-staging` / `apply-prod`. |
-| Deploy smoke test fails right after step 14 / 23 | `APP_URL` isn't set yet: redo the `gh variable set APP_URL` line from step 14 / 23. |
-| "branch is not allowed to deploy to production" | Redo step 7a. |
-| API won't start: `did not contain json key …` | A line is missing from the step 17 / 25 file. Fix it, upload it again, then re-run the deploy with the same version. |
-| `/api/health/ready` says `Database not connected` | Check the step 16 / 24 connection string, the password, and Network Access `0.0.0.0/0`. |
-| "has no successful staging deploy" | Do step 20 for that version first. |
-| No live SSLCommerz store yet | 📝 In `infra/envs/prod/main.tf`, set `sslcommerz_sandbox = true`, save it with a pull request, and use your sandbox details in step 25. |
-| Password-reset emails don't arrive | Without a domain they only go to your own Resend address (step 12). Add a domain to fix it. |
-| A run says "waiting for infra #N to complete" | An older run is waiting at `apply-prod` for approval. Open infra #N and **approve** it (if you want that prod change) or **Cancel workflow**. The newer run then continues. |
-| No alarm emails | Step 15 / 23: confirm the subscription email. |
-| Anything else | `docs/runbook.md` → "Where to look" |
+| You see                                                   | Do this                                                                                                                                 |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Redo step 7b. Always run workflows from `main`.                                                                                         |
+| GitHub infra jobs are all _skipped_                       | The variables from step 11 are missing: check `gh variable list`.                                                                       |
+| `no matching Route 53 Hosted Zone`                        | A `terraform.tfvars` has `zone_name` / `domain_name` uncommented without a real domain. Comment them out again.                         |
+| `403 Forbidden` from an `...elb.amazonaws.com` address    | Expected: the load balancer only answers CloudFront. Use your `<staging-url>` / `<prod-url>`.                                           |
+| The CloudFront address doesn't answer yet                 | Wait 5–10 minutes after `apply-staging` / `apply-prod`.                                                                                 |
+| Deploy smoke test fails right after step 14 / 23          | `APP_URL` isn't set yet: redo the `gh variable set APP_URL` line from step 14 / 23.                                                     |
+| "branch is not allowed to deploy to production"           | Redo step 7a.                                                                                                                           |
+| API won't start: `did not contain json key …`             | A line is missing from the step 17 / 25 file. Fix it, upload it again, then re-run the deploy with the same version.                    |
+| `/api/health/ready` says `Database not connected`         | Check the step 16 / 24 connection string, the password, and Network Access `0.0.0.0/0`.                                                 |
+| "has no successful staging deploy"                        | Do step 20 for that version first.                                                                                                      |
+| No live SSLCommerz store yet                              | 📝 In `infra/envs/prod/main.tf`, set `sslcommerz_sandbox = true`, save it with a pull request, and use your sandbox details in step 25. |
+| Password-reset emails don't arrive                        | Without a domain they only go to your own Resend address (step 12). Add a domain to fix it.                                             |
+| No alarm emails                                           | Step 15 / 23: confirm the subscription email.                                                                                           |
+| Anything else                                             | `docs/runbook.md` → "Where to look"                                                                                                     |
 
 ---
 
-*For background: `infra/BOOTSTRAP.md` (what step 9 creates), `infra/DATA.md` (database and secrets),
-`docs/releasing.md`, `docs/runbook.md`, `docs/architecture.md`.*
+_For background: `infra/BOOTSTRAP.md` (what step 9 creates), `infra/DATA.md` (database and secrets),
+`docs/releasing.md`, `docs/runbook.md`, `docs/architecture.md`._

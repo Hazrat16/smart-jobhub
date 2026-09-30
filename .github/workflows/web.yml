@@ -22,6 +22,7 @@ jobs:
       pull-requests: read
     outputs:
       web: ${{ steps.filter.outputs.web }}
+      onboarding: ${{ steps.filter.outputs.onboarding }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -30,6 +31,11 @@ jobs:
           filters: |
             web:
               - 'apps/web/**'
+              - '.github/workflows/web.yml'
+            # Sign-up/sign-in spans both apps, so either one can break it.
+            onboarding:
+              - 'apps/web/**'
+              - 'apps/api/**'
               - '.github/workflows/web.yml'
 
   build:
@@ -115,9 +121,83 @@ jobs:
           image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress
           job-platform-web:${{ github.sha }}
 
+  # Real sign-up and sign-in in a browser, against the real API and MongoDB.
+  e2e-onboarding:
+    needs: changes
+    if: needs.changes.outputs.onboarding == 'true'
+    runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:7.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      MONGODB_URI: mongodb://127.0.0.1:27017/e2e
+      E2E_DEMO_PASSWORD: e2e-demo-password
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/api/package-lock.json
+            apps/web/package-lock.json
+
+      - name: Build the API and seed demo data
+        working-directory: apps/api
+        run: |
+          npm ci
+          npm run build
+          DEMO_PASSWORD="$E2E_DEMO_PASSWORD" SEED_DEMO_CONFIRM=yes node dist/scripts/seedDemo.js
+
+      - name: Start the API
+        working-directory: apps/api
+        env:
+          PORT: "5000"
+          NODE_ENV: development
+          JWT_SECRET: ci-e2e-jwt-secret-at-least-32-characters
+          RESEND_API_KEY: re_ci_dummy
+          CORS_ALLOWED_ORIGINS: http://127.0.0.1:3000,http://localhost:3000
+        run: |
+          nohup node dist/startChatServer.js > api.log 2>&1 &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:5000/api/health/ready > /dev/null && exit 0
+            sleep 2
+          done
+          cat api.log; exit 1
+
+      - name: Install the web app and browser
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Onboarding E2E
+        working-directory: apps/web
+        run: npx playwright test tests/e2e/onboarding.spec.js
+
+      - name: API log
+        if: failure()
+        run: tail -100 apps/api/api.log
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-results
+          path: apps/web/test-results
+          retention-days: 7
+
   # Single required status check for branch protection.
   web-ci:
-    needs: [changes, build, e2e-smoke, image]
+    needs: [changes, build, e2e-smoke, e2e-onboarding, image]
     if: always()
     runs-on: ubuntu-latest
     steps:
