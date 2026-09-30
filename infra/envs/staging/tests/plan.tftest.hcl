@@ -130,8 +130,13 @@ run "staging_plan" {
   }
 
   assert {
-    condition     = output.settings.use_spot && output.settings.api_scaling == { min = 0, max = 0 } && !output.settings.deletion_protection
-    error_message = "Staging: Spot, fixed size (0 until turned on), no deletion protection."
+    # Fixed size, whatever terraform.tfvars sets (0 until turned on, then 1): no scaling in staging.
+    condition = (
+      output.settings.use_spot && !output.settings.deletion_protection
+      && output.settings.api_scaling.min == output.settings.api_scaling.max
+      && output.settings.web_scaling.min == output.settings.web_scaling.max
+    )
+    error_message = "Staging: Spot, fixed size (min = max), no deletion protection."
   }
 
   assert {
