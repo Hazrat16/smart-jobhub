@@ -700,20 +700,17 @@ production. More in `docs/releasing.md`.
 
 # Stop paying
 
-💻 **Terminal** (a ready terminal):
+To delete **everything** this project created in AWS, run 💻 in a ready terminal:
 
 ```bash
-cd infra/envs/staging
-terraform init -backend-config="bucket=$(gh variable get TF_STATE_BUCKET)"
-terraform destroy
+bash scripts/destroy-everything.sh --dry-run    # shows what it would delete; changes nothing
+bash scripts/destroy-everything.sh              # does it; asks you to type the account ID first
 ```
 
-For production:
-
-1. 📝 In `infra/envs/prod/main.tf`, change `deletion_protection = true` to `false`.
-2. 💻 In `infra/envs/prod`, run the same `terraform init`, then `terraform apply`, then
-   `terraform destroy`.
-3. 🌐 Delete the Atlas clusters on the Atlas website.
+It switches off the GitHub workflows, then destroys prod, staging and the base setup (state bucket,
+image repos, CI roles, budget), and deletes the secrets. It takes about 30–40 minutes, and it's safe to
+run again if it stops halfway. At the end it lists what to delete by hand: the Atlas clusters, API keys,
+the GitHub token, and your EC2 work machine.
 
 # Later: add a domain
 
