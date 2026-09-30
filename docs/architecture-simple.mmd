@@ -1,0 +1,12 @@
+flowchart LR
+  user([Users]) -->|HTTPS| cdn[CloudFront]
+  cdn --> lb[Load balancer]
+  lb -->|pages| web[Web app<br/>Next.js]
+  lb -->|/api · chat| api[API<br/>Node.js]
+  api --> db[(MongoDB Atlas)]
+  api --> cache[(Redis)]
+
+  dev([Developer]) -->|push code| gh[GitHub Actions<br/>test · build]
+  gh -->|image| ecr[(Image registry)]
+  ecr -->|deploy| web
+  ecr -->|deploy| api

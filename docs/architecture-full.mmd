@@ -1,0 +1,105 @@
+flowchart TB
+  %% ───────────── People ─────────────
+  user(["👤 Users<br/>jobseekers · employers · admins"])
+  dev(["👩‍💻 Developer"])
+
+  %% ───────────── GitHub ─────────────
+  subgraph gh["GitHub · Hazrat16/smart-jobhub"]
+    direction TB
+    repo["Monorepo<br/>apps/api · apps/web · infra"]
+    ci["CI on every PR<br/>audit · lint · typecheck · tests<br/>Playwright onboarding E2E<br/>Docker build + Trivy · CodeQL<br/>Terraform fmt/validate/test/tflint/checkov"]
+    infrawf["infra.yml<br/>PR: plan staging + prod<br/>merge: apply staging → save prod plan<br/>approve: apply saved plan"]
+    deploywf["deploy-api / deploy-web (manual)<br/>staging: cut vN → build → scan → push → tag<br/>production: promote tested vN (approval)"]
+    envs{{"Environments<br/>staging · production 🔒 reviewer"}}
+    repo --> ci
+    repo --> infrawf
+    repo --> deploywf
+    infrawf -.-> envs
+    deploywf -.-> envs
+  end
+
+  %% ───────────── AWS ─────────────
+  subgraph aws["AWS account · ap-south-1 (Mumbai)"]
+    direction TB
+
+    subgraph boot["Bootstrap (one-time, applied by hand)"]
+      direction LR
+      oidc["IAM OIDC provider<br/>+ roles: infra-planner · infra-deployer<br/>api-deployer · web-deployer<br/>(permissions boundary)"]
+      state[("S3 · Terraform state<br/>versioned · native lock<br/>+ saved prod plans")]
+      ecr[("ECR<br/>job-platform-api · job-platform-web<br/>IMMUTABLE api-vN / web-vN")]
+      budget["AWS Budget<br/>$110/month alerts"]
+    end
+
+    cf["CloudFront (global)<br/>https://‹id›.cloudfront.net<br/>adds secret origin header"]
+
+    subgraph env["Environment ×2: staging (Spot, fixed size) · prod (on-demand, autoscaling)"]
+      direction TB
+      subgraph vpc["VPC · 2 AZs · public subnets · no NAT"]
+        direction TB
+        alb["Application Load Balancer<br/>HTTP from CloudFront IPs only<br/>+ secret header, else 403"]
+        subgraph ecs["ECS Fargate cluster"]
+          direction LR
+          web["web · Next.js 15<br/>staging 1 · prod 1–2 tasks"]
+          api["api · Express 5 + Socket.IO + BullMQ<br/>staging 1 · prod 1–3 tasks<br/>sticky sessions · circuit breaker"]
+        end
+        valkey[("ElastiCache Valkey<br/>TLS + AUTH · noeviction<br/>Socket.IO adapter · rate limits · email queue")]
+      end
+      secrets["Secrets Manager<br/>/job-platform/‹env›/api (by hand)<br/>/job-platform/‹env›/redis (Terraform)"]
+      logs["CloudWatch<br/>logs · alarms (5xx, p95, no healthy targets,<br/>CPU/memory, Valkey memory)"]
+      events["EventBridge<br/>failed-deployment alerts<br/>prod: nightly demo reset 03:00"]
+      sns["SNS → 📧 alert email"]
+    end
+  end
+
+  %% ───────────── Outside services ─────────────
+  subgraph saas["External services"]
+    direction TB
+    atlas[("MongoDB Atlas · AWS Mumbai<br/>staging M0 · prod Flex (daily backups)")]
+    resend["Resend (email)"]
+    cloud["Cloudinary (uploads)"]
+    ssl["SSLCommerz (payments)"]
+    groq["Groq (AI resume fit)"]
+    sentry["Sentry (errors, per release)"]
+  end
+
+  %% ───────────── Request path ─────────────
+  user -->|HTTPS| cf
+  cf -->|"HTTP + X-Origin-Verify"| alb
+  alb -->|"/*"| web
+  alb -->|"/api/* · /socket.io/*"| api
+  api -->|TLS| valkey
+  api -->|TLS| atlas
+  api --> resend
+  api --> cloud
+  api --> ssl
+  api --> groq
+  api -.-> sentry
+  secrets -. injected at task start .-> api
+  ecr -. image .-> web
+  ecr -. image .-> api
+
+  %% ───────────── Operations ─────────────
+  api -.-> logs
+  alb -.-> logs
+  logs --> sns
+  events --> sns
+  events -. runs seed task .-> api
+  budget --> sns
+
+  %% ───────────── Delivery ─────────────
+  dev -->|pull request| repo
+  infrawf -->|"OIDC (no keys)"| oidc
+  deploywf -->|"OIDC (no keys)"| oidc
+  infrawf -->|plan / apply| state
+  infrawf -->|Terraform| env
+  deploywf -->|push vN| ecr
+  deploywf -->|"new task definition → rollout"| ecs
+
+  classDef aws fill:#fff4e5,stroke:#ff9900,color:#232f3e
+  classDef data fill:#e8f4fd,stroke:#1f77b4,color:#0b2e4f
+  classDef ext fill:#eef7ee,stroke:#2e7d32,color:#1b3d1d
+  classDef ghc fill:#f3f0ff,stroke:#6e40c9,color:#2a1a55
+  class cf,alb,web,api,secrets,logs,events,sns,oidc,budget aws
+  class valkey,state,ecr,atlas data
+  class resend,cloud,ssl,groq,sentry ext
+  class repo,ci,infrawf,deploywf,envs ghc
