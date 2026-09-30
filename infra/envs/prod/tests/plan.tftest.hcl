@@ -135,8 +135,14 @@ run "prod_plan" {
   }
 
   assert {
-    condition     = output.settings.api_scaling == { min = 1, max = 3 } && output.settings.web_scaling == { min = 1, max = 2 }
-    error_message = "Prod autoscaling ranges changed."
+    # min_count comes from terraform.tfvars (1 by default, 2 for high availability).
+    condition = (
+      output.settings.api_scaling.max == 3 && output.settings.web_scaling.max == 2
+      && output.settings.api_scaling.min >= 1 && output.settings.web_scaling.min >= 1
+      && output.settings.api_scaling.min <= output.settings.api_scaling.max
+      && output.settings.web_scaling.min <= output.settings.web_scaling.max
+    )
+    error_message = "Prod must always run at least one task per service and scale up to 3 (api) / 2 (web)."
   }
 
   assert {
