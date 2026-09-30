@@ -6,5 +6,5 @@ alert_emails = ["hazrat17016@gmail.com"]
 # domain_name = "staging.example.com"
 
 # Raise to 1 once the secret has values and a version is deployed (setup.md step 19).
-api_desired_count = 0
-web_desired_count = 0
+api_desired_count = 1
+web_desired_count = 1
