@@ -9,19 +9,19 @@ Every step starts with a label that tells you where to do it:
 
 | Label | Where | What it means |
 |---|---|---|
-| 💻 **Terminal** | Your laptop | Open a terminal and type the commands |
-| 📝 **Edit file** | Your laptop, in VS Code | Open the file in the project and change it |
+| 💻 **Terminal** | Your EC2 work machine (the one you SSH into) | Type the commands there |
+| 📝 **Edit file** | A file in `~/smart-jobhub` on the EC2 machine | Open it with `nano` (or VS Code Remote-SSH, see step 0) and change it |
 | 🌐 **Website** | A website in your browser | AWS console, GitHub, Atlas, Resend, your domain registrar |
 | 📧 **Email** | Your inbox | Click a link that was sent to you |
 
 **Every time you open a new terminal** for this guide, run these two lines first:
 
 ```bash
-cd /media/hazrat/Hazrat4/Code/devops/smart-jobhub
+cd ~/smart-jobhub
 export AWS_PROFILE=smartjobhub-admin AWS_REGION=ap-south-1
 ```
 
-The first line takes you to the project folder. The second tells the `aws` and `terraform` commands
+The first line takes you to the project folder (you create it in step 0). The second tells the `aws` and `terraform` commands
 which AWS account to use (you create that login in step 4). Below, "a ready terminal" means a terminal
 where you've run these two lines.
 
@@ -44,6 +44,23 @@ where you've run these two lines.
 
 # Stage A: Prepare (about 1 hour)
 
+## Step 0. Your work machine (EC2)
+
+You run everything from your EC2 machine, not your laptop. That's fine, but the EC2 machine needs its
+own copy of the project, because the files on your laptop aren't there.
+
+**How to edit files on it:**
+- **`nano`** (simplest): `nano path/to/file` opens the file. Edit it, then press **Ctrl+O** and
+  **Enter** to save, and **Ctrl+X** to quit.
+- **or VS Code Remote-SSH** (nicer): in VS Code on your laptop, install the **Remote - SSH** extension,
+  then *Remote-SSH: Connect to Host…* → `ubuntu@<your-ec2-address>` → *Open Folder* →
+  `/home/ubuntu/smart-jobhub`. VS Code then edits the files **on the EC2 machine** directly.
+
+The project is copied onto the EC2 machine at the end of step 2 (it needs the GitHub login first).
+
+> If you've changed files on your laptop that aren't on GitHub yet, push them from the laptop first
+> (`git push`), so the EC2 copy gets them.
+
 ## Step 1. Create the accounts you need
 
 🌐 **Website**
@@ -62,6 +79,9 @@ Sign up for each of these (free unless noted):
 💻 **Terminal** (any folder)
 
 ```bash
+# Basics (fresh Ubuntu EC2 machines don't always have them)
+sudo apt update && sudo apt install -y unzip curl git
+
 # AWS CLI version 2
 cd /tmp && curl -sSLo awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
 unzip -q awscliv2.zip && sudo ./aws/install --update
@@ -74,19 +94,52 @@ sudo apt update && sudo apt install -y terraform
 
 # GitHub CLI and small helpers
 sudo apt install -y gh jq dnsutils openssl
-
-# Log the GitHub CLI in (a browser window opens)
-gh auth login
 ```
 
-For `gh auth login`, choose: **GitHub.com → HTTPS → Login with a web browser**.
+**Log the GitHub CLI in with a token that can only touch this one repo** (not your organizations).
+Don't use `gh auth login`'s browser option: it can't leave organizations out.
+
+🌐 **Website:** https://github.com/settings/personal-access-tokens/new
+
+| Field | Value |
+|---|---|
+| Token name | `smart-jobhub setup` |
+| Resource owner | **Hazrat16** (your own account, not an organization) |
+| Expiration | 30 days (make a new one when it expires) |
+| Repository access | **Only select repositories** → `Hazrat16/smart-jobhub` |
+
+Under **Repository permissions**, set these to **Read and write**:
+**Actions, Administration, Contents, Environments, Pull requests, Variables, Workflows**.
+Set **Commit statuses** to **Read-only**. (**Metadata** is read-only automatically.) Leave everything
+else as *No access*, and leave **Account permissions** empty.
+
+Click **Generate token** and copy it (`github_pat_...`).
+
+💻 **Terminal:** paste the token when asked (nothing shows while you paste; that's normal):
+
+```bash
+read -rs GH_PAT && echo "$GH_PAT" | gh auth login --with-token && unset GH_PAT
+```
+
+Then let `git` use the same token, and copy the project onto this machine:
+
+```bash
+gh auth setup-git
+git config --global user.name  "Hazrat16"
+git config --global user.email "<your GitHub email>"
+cd ~ && git clone https://github.com/Hazrat16/smart-jobhub.git
+cd ~/smart-jobhub && git log --oneline -1
+```
+
+> If a `gh` or `git push` command later says `403` / "Resource not accessible", edit the token on
+> GitHub and add the permission it names.
 
 ✅ **You should see:**
 
 ```bash
 aws --version        # aws-cli/2.something
 terraform version    # Terraform v1.11 or newer
-gh auth status       # Logged in to github.com as Hazrat16
+gh auth status       # Logged in to github.com account Hazrat16
 ```
 
 ## Step 3. Make a safe admin login for AWS
@@ -141,17 +194,16 @@ Nothing to do. Without a domain, the site runs on a CloudFront address. To add a
 
 # Stage B: GitHub (about 15 minutes)
 
-The `gh` commands run on your laptop, but they change settings on **github.com**.
+The `gh` commands run on your EC2 machine, but they change settings on **github.com**.
 
-## Step 6. Upload the code
+## Step 6. Check GitHub has run the code once
 
-💻 **Terminal** (a ready terminal)
-
-```bash
-git push origin main
-```
+The code is already on GitHub (you cloned it from there in step 2).
 
 🌐 **Website:** https://github.com/Hazrat16/smart-jobhub/actions
+
+If there are no runs yet, 💻 start them with an empty commit from a ready terminal:
+`git commit --allow-empty -m "ci: first run" && git push origin main`.
 
 ✅ **You should see** 4 runs (`api`, `web`, `infra`, `codeql`) turn **green**. Some jobs show as
 *skipped*; that's normal for now.
@@ -178,6 +230,21 @@ gh api -X PUT repos/Hazrat16/smart-jobhub/actions/oidc/customization/sub --input
 {"use_default": false, "include_claim_keys": ["repo", "context", "job_workflow_ref"]}
 EOF
 ```
+
+Then save the repo's OIDC identity for step 9. GitHub may name the repo by its ID numbers in its tokens
+(`Hazrat16@54895423/smart-jobhub@1393997882`), and the AWS roles need to know that:
+
+```bash
+IDS=$(gh api repos/Hazrat16/smart-jobhub/actions/oidc/customization/sub --jq '.sub_claim_prefix // ""' | sed 's/^repo://')
+echo "$IDS"
+[ -n "$IDS" ] && [ "$IDS" != "Hazrat16/smart-jobhub" ] && \
+  echo "github_repo_ids = \"$IDS\"" >> infra/bootstrap/terraform.tfvars
+tail -2 infra/bootstrap/terraform.tfvars
+```
+
+If it prints something like `Hazrat16@54895423/smart-jobhub@1393997882`, the last line of
+`infra/bootstrap/terraform.tfvars` is now `github_repo_ids = "…"`. If it prints `Hazrat16/smart-jobhub`
+or nothing, no line is added; that's fine too.
 
 **7c. Create the `staging` and `production` environments** (production waits for your approval):
 
@@ -390,10 +457,10 @@ cat > /tmp/staging-api.json <<EOF
   "SENTRY_DSN": ""
 }
 EOF
-code /tmp/staging-api.json
+nano /tmp/staging-api.json
 ```
 
-(`code` opens the file in VS Code. If that doesn't work, use `nano /tmp/staging-api.json`.)
+(In `nano`: edit, **Ctrl+O** then **Enter** to save, **Ctrl+X** to quit.)
 
 **17b.** 📝 **Edit file:** replace every `PASTE…` with the real value and save. Leave `GROQ_API_KEY`
 and `SENTRY_DSN` as `""` if you don't use them. **Don't delete any line.**
@@ -558,7 +625,7 @@ cat > /tmp/prod-api.json <<EOF
   "DEMO_PASSWORD": "PASTE_A_DEMO_PASSWORD"
 }
 EOF
-code /tmp/prod-api.json
+nano /tmp/prod-api.json
 ```
 
 **25b.** 📝 **Edit file:** replace the `PASTE…` values and save.
@@ -649,7 +716,7 @@ production. More in `docs/releasing.md`.
 
 ```bash
 cd infra/envs/staging
-terraform init -backend-config="bucket=$(gh variable get TF_STATE_BUCKET)"
+terraform init -backend-config="bucket=$(gh api repos/Hazrat16/smart-jobhub/actions/variables/TF_STATE_BUCKET --jq .value)"
 terraform destroy
 ```
 
@@ -687,7 +754,7 @@ When you buy one (it's only $3–15 a year):
 
 | You see | Do this |
 |---|---|
-| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Redo step 7b. Always run workflows from `main`. |
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Open the failed job: the **Show OIDC claims** step prints the token's `sub`. Check that step 7b's `github_repo_ids` line matches it, then run `terraform apply` in `infra/bootstrap` again (step 9). Always run workflows from `main`. |
 | GitHub infra jobs are all *skipped* | The variables from step 11 are missing: check `gh variable list`. |
 | `no matching Route 53 Hosted Zone` | A `terraform.tfvars` has `zone_name` / `domain_name` uncommented without a real domain. Comment them out again. |
 | `403 Forbidden` from an `...elb.amazonaws.com` address | Expected: the load balancer only answers CloudFront. Use your `<staging-url>` / `<prod-url>`. |
