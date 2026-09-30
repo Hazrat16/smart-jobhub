@@ -3,7 +3,13 @@ data "aws_caller_identity" "current" {}
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   state_bucket = "${var.project}-tfstate-${local.account_id}"
-  infra_wf     = "${var.github_repo}/.github/workflows/infra.yml"
+
+  # OIDC subjects: "<prefix>:<context>:job_workflow_ref:<repo>/.github/workflows/<file>@<ref>".
+  # With immutable subjects the prefix carries the owner and repo IDs. Whether the
+  # job_workflow_ref part does too isn't guaranteed, so both spellings of *this*
+  # repo are accepted there.
+  oidc_prefix = var.github_repo_ids == null ? "repo:${var.github_repo}" : "repo:${var.github_repo_ids}"
+  oidc_repos  = var.github_repo_ids == null ? [var.github_repo] : [var.github_repo, var.github_repo_ids]
 }
 
 # ---------------------------------------------------------------------------

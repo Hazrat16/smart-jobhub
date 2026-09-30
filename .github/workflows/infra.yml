@@ -124,6 +124,9 @@ jobs:
           role-to-assume: ${{ vars.AWS_INFRA_PLANNER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - if: failure()
+        uses: ./.github/actions/oidc-debug
+
       - name: terraform init
         run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
 
@@ -168,6 +171,9 @@ jobs:
           role-to-assume: ${{ vars.AWS_INFRA_DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      - if: failure()
+        uses: ./.github/actions/oidc-debug
+
       - name: terraform init
         run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
 
@@ -205,6 +211,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_INFRA_PLANNER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+
+      - if: failure()
+        uses: ./.github/actions/oidc-debug
 
       - name: terraform init
         run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
@@ -267,6 +276,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_INFRA_DEPLOYER_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+
+      - if: failure()
+        uses: ./.github/actions/oidc-debug
 
       - name: terraform init
         run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"

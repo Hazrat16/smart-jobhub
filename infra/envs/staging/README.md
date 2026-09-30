@@ -28,7 +28,7 @@ From a laptop instead (admin credentials):
 
 ```bash
 cd infra/envs/staging
-terraform init -backend-config="bucket=$(gh variable get TF_STATE_BUCKET)"
+terraform init -backend-config="bucket=$(gh api repos/Hazrat16/smart-jobhub/actions/variables/TF_STATE_BUCKET --jq .value)"
 terraform plan -out staging.tfplan
 terraform apply staging.tfplan
 ```

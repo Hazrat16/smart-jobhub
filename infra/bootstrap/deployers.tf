@@ -83,8 +83,8 @@ module "deployer" {
   name              = "${var.project}-${each.key}-deployer"
   oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
   subjects = [
-    for gh_env in keys(local.deploy_envs) :
-    "repo:${var.github_repo}:environment:${gh_env}:job_workflow_ref:${var.github_repo}/.github/workflows/deploy-${each.key}.yml@refs/heads/main"
+    for pair in setproduct(keys(local.deploy_envs), local.oidc_repos) :
+    "${local.oidc_prefix}:environment:${pair[0]}:job_workflow_ref:${pair[1]}/.github/workflows/deploy-${each.key}.yml@refs/heads/main"
   ]
 
   inline_policies = { deploy = data.aws_iam_policy_document.deployer[each.key].json }
