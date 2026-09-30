@@ -11,19 +11,27 @@ keyless CI/CD and versioned, gated releases.
 
 ## Live demo
 
-**https://&lt;your-domain&gt;**
+**https://dl6rwqfd283cd.cloudfront.net** (staging; production gets its own address later)
 
-| Role | Email | Password |
-|---|---|---|
-| Jobseeker | `demo.jobseeker@smartjobhub.test` | `<DEMO_PASSWORD>` |
-| Employer | `demo.employer@smartjobhub.test` | `<DEMO_PASSWORD>` |
+Every sample account below uses the same password: **`<DEMO_PASSWORD>`**
 
-More sample employers and jobseekers (with companies, applications at every stage, chats and
-notifications) use the same password: `farhana.rahman@`, `tanvir.hasan@`, `nusrat.jahan@`,
-`rafi.ahmed@`, `sadia.islam@smartjobhub.test`.
+| Role | Name | Email | What you'll find |
+|---|---|---|---|
+| Jobseeker | Demo Jobseeker | `demo.jobseeker@smartjobhub.test` | Full profile; applications that are shortlisted, reviewed, rejected and pending; saved jobs; chats with two employers |
+| Jobseeker | Nusrat Jahan | `nusrat.jahan@smartjobhub.test` | Frontend engineer with an **accepted** offer |
+| Jobseeker | Rafi Ahmed | `rafi.ahmed@smartjobhub.test` | DevOps engineer, shortlisted |
+| Jobseeker | Sadia Islam | `sadia.islam@smartjobhub.test` | Student looking for an internship |
+| Employer | Demo Employer | `demo.employer@smartjobhub.test` | **Acme Robotics**: 6 jobs (one boosted, one draft), applicants at every stage, chats |
+| Employer | Farhana Rahman | `farhana.rahman@smartjobhub.test` | **Padma Fintech**: 4 jobs, including a closed one |
+| Employer | Tanvir Hasan | `tanvir.hasan@smartjobhub.test` | **Meghna Health**: 4 jobs |
 
-The demo accounts are shared, and everything they change is reset every night at 03:00 (Dhaka).
-Job boosting is a live SSLCommerz checkout on this site, so look, but don't pay.
+There's also `suspended.user@smartjobhub.test`, which can't log in (it's there to show the admin's
+moderation view), and an admin account, `admin@smartjobhub.test`, whose password isn't public.
+
+The sample data is fictional and shared, so please be kind. Running the seed again
+(`apps/api/src/scripts/seedDemo.ts`, setup.md step 21) resets it; on production it resets every night
+at 03:00 (Dhaka). On staging, job boosting uses the SSLCommerz sandbox (test cards only). On production
+it's a real checkout, so look, but don't pay.
 
 ## What it does
 
