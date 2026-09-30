@@ -110,6 +110,9 @@ jobs:
           role-to-assume: ${{ vars.AWS_WEB_DEPLOYER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - if: failure()
+        uses: ./.github/actions/oidc-debug
+
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -176,6 +179,9 @@ jobs:
         with:
           role-to-assume: ${{ vars.AWS_WEB_DEPLOYER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - if: failure()
+        uses: ./.github/actions/oidc-debug
 
       - id: ecr
         uses: aws-actions/amazon-ecr-login@v2

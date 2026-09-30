@@ -121,11 +121,11 @@ module "infra_planner" {
 
   name              = "${var.project}-infra-planner"
   oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
-  subjects = [
-    "repo:${var.github_repo}:pull_request:job_workflow_ref:${local.infra_wf}@refs/pull/*/merge",
+  subjects = flatten([for r in local.oidc_repos : [
+    "${local.oidc_prefix}:pull_request:job_workflow_ref:${r}/.github/workflows/infra.yml@refs/pull/*/merge",
     # After merge: the prod plan that waits for approval.
-    "repo:${var.github_repo}:ref:refs/heads/main:job_workflow_ref:${local.infra_wf}@refs/heads/main",
-  ]
+    "${local.oidc_prefix}:ref:refs/heads/main:job_workflow_ref:${r}/.github/workflows/infra.yml@refs/heads/main",
+  ]])
 
   managed_policy_arns = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
   inline_policies     = { state = data.aws_iam_policy_document.planner_state.json }
@@ -246,8 +246,8 @@ module "infra_deployer" {
   name              = "${var.project}-infra-deployer"
   oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
   subjects = [
-    for env in ["staging", "production"] :
-    "repo:${var.github_repo}:environment:${env}:job_workflow_ref:${local.infra_wf}@refs/heads/main"
+    for pair in setproduct(["staging", "production"], local.oidc_repos) :
+    "${local.oidc_prefix}:environment:${pair[0]}:job_workflow_ref:${pair[1]}/.github/workflows/infra.yml@refs/heads/main"
   ]
 
   managed_policy_arns = ["arn:aws:iam::aws:policy/PowerUserAccess"]
