@@ -3,7 +3,10 @@ data "aws_caller_identity" "current" {}
 locals {
   name       = "${var.project}-${var.environment}"
   account_id = data.aws_caller_identity.current.account_id
-  public_url = "https://${var.domain_name}"
+
+  # No domain → CloudFront is the public entry point (see modules/alb, modules/cdn).
+  use_domain = var.domain_name != null
+  public_url = local.use_domain ? "https://${var.domain_name}" : "https://${module.cdn[0].domain_name}"
 
   # Created by infra/bootstrap.
   workload_boundary_arn = "arn:aws:iam::${local.account_id}:policy/${var.project}/${var.project}-workload-boundary"
@@ -25,12 +28,31 @@ module "network" {
 module "alb" {
   source = "../alb"
 
-  name                = local.name
-  vpc_id              = module.network.vpc_id
-  subnet_ids          = module.network.public_subnet_ids
-  zone_name           = var.zone_name
-  domain_name         = var.domain_name
-  deletion_protection = var.deletion_protection
+  name                 = local.name
+  vpc_id               = module.network.vpc_id
+  subnet_ids           = module.network.public_subnet_ids
+  zone_name            = var.zone_name
+  domain_name          = var.domain_name
+  deletion_protection  = var.deletion_protection
+  origin_verify_secret = local.use_domain ? null : random_password.origin_verify[0].result
+}
+
+# Shared secret between CloudFront and the ALB, so the ALB can refuse anything
+# that didn't come through this environment's distribution.
+resource "random_password" "origin_verify" {
+  count = local.use_domain ? 0 : 1
+
+  length  = 48
+  special = false
+}
+
+module "cdn" {
+  source = "../cdn"
+  count  = local.use_domain ? 0 : 1
+
+  name                 = local.name
+  alb_dns_name         = module.alb.dns_name
+  origin_verify_secret = random_password.origin_verify[0].result
 }
 
 module "api_secret" {
@@ -87,10 +109,11 @@ module "api" {
   permissions_boundary_arn = local.workload_boundary_arn
 
   environment = merge({
-    NODE_ENV              = "production"
-    PORT                  = "5000"
-    HOST                  = "0.0.0.0"
-    TRUST_PROXY_HOPS      = "1"
+    NODE_ENV = "production"
+    PORT     = "5000"
+    HOST     = "0.0.0.0"
+    # Proxies in front of the app: the ALB, plus CloudFront when there's no domain.
+    TRUST_PROXY_HOPS      = local.use_domain ? "1" : "2"
     FRONTEND_URL          = local.public_url
     API_PUBLIC_BASE_URL   = local.public_url
     CORS_ALLOWED_ORIGINS  = local.public_url

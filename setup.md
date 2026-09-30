@@ -1,134 +1,166 @@
-# Setup: from an empty AWS account to a live site
+# Setup guide
 
-Follow the parts **in order**. Each step says what to run and how to check it worked. Don't skip the
-checks: most problems later come from an earlier step that half-worked.
+Put the project live on AWS, step by step. Do the steps **in order**, and don't skip the "You should
+see" checks.
 
-**You'll end up with:** `https://staging.<your-domain>` and `https://<your-domain>`, each on ECS Fargate
-behind a load balancer with HTTPS, MongoDB on Atlas, Redis on ElastiCache, alarms by email, and
-manual versioned releases from GitHub Actions.
+## Where each step happens
 
-**Time:** about 3–4 hours spread over a day (DNS and certificate checks involve some waiting).
-**Cost:** about $50/month staging + $65/month prod + Atlas Flex ($8–30). It starts billing in Part 6.
-Part 13 explains how to stop it.
+Every step starts with a label that tells you where to do it:
 
-Placeholders used below, which you replace with your own values:
+| Label | Where | What it means |
+|---|---|---|
+| 💻 **Terminal** | Your laptop | Open a terminal and type the commands |
+| 📝 **Edit file** | Your laptop, in VS Code | Open the file in the project and change it |
+| 🌐 **Website** | A website in your browser | AWS console, GitHub, Atlas, Resend, your domain registrar |
+| 📧 **Email** | Your inbox | Click a link that was sent to you |
 
-| Placeholder | Example |
+**Every time you open a new terminal** for this guide, run these two lines first:
+
+```bash
+cd /media/hazrat/Hazrat4/Code/devops/smart-jobhub
+export AWS_PROFILE=smartjobhub-admin AWS_REGION=ap-south-1
+```
+
+The first line takes you to the project folder. The second tells the `aws` and `terraform` commands
+which AWS account to use (you create that login in step 4). Below, "a ready terminal" means a terminal
+where you've run these two lines.
+
+**Replace these everywhere** you see them:
+
+| Write this | Instead of |
 |---|---|
-| `<your-domain>` | `smartjobhub.com` |
-| `<alert-email>` | `alerts@smartjobhub.com` (a shared alias is best; it goes in committed files) |
-| `<ACCOUNT_ID>` | the 12 digits from `aws sts get-caller-identity` |
+| the email that should get alerts | `<alert-email>` |
+| staging's address, e.g. `https://d1abc234xyz.cloudfront.net` (you get it in step 14) | `<staging-url>` |
+| production's address (you get it in step 23) | `<prod-url>` |
+
+> **No domain needed.** Each environment gets a free HTTPS address from AWS CloudFront, like
+> `https://d1abc234xyz.cloudfront.net`. You can add your own domain later ("Later: add a domain" at
+> the end).
+
+**Cost:** about $120–150 a month once both staging and prod are running. Most of it starts at step 14.
+"Stop paying" at the end explains how to turn it off.
 
 ---
 
-## Part 1: Accounts you need
+# Stage A: Prepare (about 1 hour)
 
-Create these before starting. Free tiers are fine except where noted.
+## Step 1. Create the accounts you need
 
-- [ ] **AWS account.** You'll need a card.
-- [ ] **A domain name,** from any registrar (Namecheap, GoDaddy, Route 53, …).
-- [ ] **GitHub.** The repo `Hazrat16/smart-jobhub` must exist, and you must be an admin of it.
-- [ ] **MongoDB Atlas.** https://cloud.mongodb.com (staging is free; prod Flex is about $8–30/month).
-- [ ] **Resend** for email: https://resend.com
-- [ ] **Cloudinary** for uploads: https://cloudinary.com
-- [ ] **SSLCommerz.** A **sandbox** store for staging (https://developer.sslcommerz.com). Production
-      needs a **live** store, which requires business verification. If you don't have one yet, see Part 10.
-- [ ] *(optional)* **Groq** for the AI resume analyzer (https://console.groq.com), and **Sentry** for
-      error tracking (https://sentry.io, create a Node.js project and copy its DSN).
+🌐 **Website**
 
-## Part 2: Tools on your laptop (Ubuntu)
+Sign up for each of these (free unless noted):
+
+- [ ] **AWS**: https://aws.amazon.com (needs a card)
+- [ ] **MongoDB Atlas**: https://cloud.mongodb.com (database; prod costs about $8–30 a month)
+- [ ] **Resend**: https://resend.com (sends emails)
+- [ ] **Cloudinary**: https://cloudinary.com (stores uploaded photos and resumes)
+- [ ] **SSLCommerz sandbox**: https://developer.sslcommerz.com (test payments)
+- [ ] *(optional)* **Groq**: https://console.groq.com (AI resume analyzer)
+
+## Step 2. Install the tools
+
+💻 **Terminal** (any folder)
 
 ```bash
-# AWS CLI v2 (the apt "awscli" package is the old v1; don't use it)
+# AWS CLI version 2
 cd /tmp && curl -sSLo awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip"
-unzip -q awscliv2.zip && sudo ./aws/install --update && aws --version     # aws-cli/2.x
+unzip -q awscliv2.zip && sudo ./aws/install --update
 
-# Terraform (1.11 or newer)
+# Terraform
 wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp.gpg
 echo "deb [signed-by=/usr/share/keyrings/hashicorp.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" \
   | sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update && sudo apt install -y terraform && terraform version
+sudo apt update && sudo apt install -y terraform
 
-# GitHub CLI, jq, dig, openssl
+# GitHub CLI and small helpers
 sudo apt install -y gh jq dnsutils openssl
-gh auth login          # choose GitHub.com → HTTPS → log in with the browser
-gh auth status         # must show your account, with the "repo" and "workflow" scopes
 
-# (optional) mongosh, to test the Atlas connection
-# https://www.mongodb.com/try/download/shell
+# Log the GitHub CLI in (a browser window opens)
+gh auth login
 ```
 
-- [ ] `aws --version` shows **2.x**, `terraform version` shows **≥ 1.11**, and `gh auth status` is logged in.
+For `gh auth login`, choose: **GitHub.com → HTTPS → Login with a web browser**.
 
-## Part 3: Secure the AWS account and get CLI access
+✅ **You should see:**
 
-In the AWS console (https://console.aws.amazon.com), signed in as **root**:
+```bash
+aws --version        # aws-cli/2.something
+terraform version    # Terraform v1.11 or newer
+gh auth status       # Logged in to github.com as Hazrat16
+```
 
-1. [ ] **Enable MFA on root:** top right → *Security credentials* → *Assign MFA device*.
-2. [ ] **Create an admin user:** IAM → Users → *Create user* `admin`, tick *Provide user access to the
-       console*, and attach the policy **AdministratorAccess**.
-3. [ ] Sign out of root and **sign in as `admin`**. From now on, don't use root.
-4. [ ] Enable MFA on `admin` too (IAM → Users → admin → *Security credentials*).
-5. [ ] Create a CLI key: IAM → Users → admin → *Security credentials* → *Create access key* →
-       *Command Line Interface*. Copy both values.
+## Step 3. Make a safe admin login for AWS
+
+🌐 **Website:** https://console.aws.amazon.com, signed in with your AWS email (the "root" user)
+
+1. [ ] Top right → your name → **Security credentials** → **Assign MFA device**. Set up an
+       authenticator app.
+2. [ ] Search for **IAM** → **Users** → **Create user**:
+       - User name: `admin`
+       - Tick **Provide user access to the AWS Management Console**
+       - Next → **Attach policies directly** → tick **AdministratorAccess** → Create
+3. [ ] Sign out, then sign in again as the **`admin`** user (the sign-in URL is on the page you just
+       saw). Use `admin` from now on, never root.
+4. [ ] IAM → Users → **admin** → **Security credentials**:
+       - **Assign MFA device** (for admin too)
+       - **Create access key** → choose **Command Line Interface (CLI)** → copy the **Access key**
+         and the **Secret access key**
+
+## Step 4. Connect your terminal to AWS
+
+💻 **Terminal** (any folder)
 
 ```bash
 aws configure --profile smartjobhub-admin
-#   AWS Access Key ID:     <paste>
-#   AWS Secret Access Key: <paste>
-#   Default region name:   ap-south-1
-#   Default output format: json
+```
 
+It asks four questions. Paste your keys from step 3:
+
+```
+AWS Access Key ID:     (paste the Access key)
+AWS Secret Access Key: (paste the Secret access key)
+Default region name:   ap-south-1
+Default output format: json
+```
+
+Then:
+
+```bash
 export AWS_PROFILE=smartjobhub-admin AWS_REGION=ap-south-1
 aws sts get-caller-identity
 ```
 
-- [ ] The output shows `"Arn": "arn:aws:iam::<ACCOUNT_ID>:user/admin"`. Note the 12-digit `<ACCOUNT_ID>`.
+✅ **You should see** a line like `"Arn": "arn:aws:iam::123456789012:user/admin"`.
 
-> Put `export AWS_PROFILE=smartjobhub-admin AWS_REGION=ap-south-1` at the top of every new terminal
-> you use for this guide.
+## Step 5. Domain: skip for now
 
-## Part 4: Put your domain on Route 53
+Nothing to do. Without a domain, the site runs on a CloudFront address. To add a domain later, see
+"Later: add a domain" at the end.
 
-The load balancer's HTTPS certificate is validated through DNS, so the domain's DNS must be hosted in
-Route 53 in **this** AWS account.
+---
 
-```bash
-aws route53 create-hosted-zone --name <your-domain> --caller-reference "setup-$(date +%s)" \
-  --query 'DelegationSet.NameServers' --output text
-```
+# Stage B: GitHub (about 15 minutes)
 
-That prints four name servers (like `ns-123.awsdns-45.com`).
+The `gh` commands run on your laptop, but they change settings on **github.com**.
 
-- [ ] **At your registrar**, replace the domain's name servers with those four. (If you bought the
-      domain through Route 53, this is already done.)
-- [ ] Wait until the new name servers are live. It usually takes minutes, sometimes a few hours:
+## Step 6. Upload the code
+
+💻 **Terminal** (a ready terminal)
 
 ```bash
-dig NS <your-domain> +short      # must list the same four awsdns name servers
-```
-
-> **Already have a website or email on this domain?** Copy its existing DNS records (A, MX, TXT, …)
-> into the new hosted zone *before* switching name servers, or they'll stop working. Prod also creates an
-> A record for the bare `<your-domain>`. If that's already in use, choose `app.<your-domain>` for prod in
-> Part 8.
-
-## Part 5: GitHub setup
-
-### 5.1 Push the code and let CI run once
-
-```bash
-cd ~/path/to/smart-jobhub
 git push origin main
 ```
 
-- [ ] GitHub → **Actions**: the `api`, `web`, `infra` and `codeql` runs are green. The AWS jobs are
-      *skipped* for now; that's expected.
+🌐 **Website:** https://github.com/Hazrat16/smart-jobhub/actions
 
-### 5.2 Protect `main`
+✅ **You should see** 4 runs (`api`, `web`, `infra`, `codeql`) turn **green**. Some jobs show as
+*skipped*; that's normal for now.
 
-This needs the CI checks to have run once (5.1). The `production` environment only accepts deploys from
-protected branches.
+## Step 7. GitHub settings
+
+💻 **Terminal** (a ready terminal). Copy and run each block.
+
+**7a. Protect the `main` branch:**
 
 ```bash
 gh api -X PUT repos/Hazrat16/smart-jobhub/branches/main/protection --input - <<'EOF'
@@ -139,26 +171,15 @@ gh api -X PUT repos/Hazrat16/smart-jobhub/branches/main/protection --input - <<'
 EOF
 ```
 
-- [ ] Settings → Branches shows a rule for `main`.
-
-From here on, make changes with **pull requests**. Terraform plans show up on the PR, which is the
-point of the review. The merge commands below wait for the checks first (`gh pr checks --watch`),
-because a protected branch won't merge while they're running.
-
-### 5.3 Put the workflow name into the OIDC token
-
-The AWS roles trust a specific workflow *file*. GitHub only includes that in the token after this setting:
+**7b. Let AWS recognise which GitHub workflow is calling:**
 
 ```bash
 gh api -X PUT repos/Hazrat16/smart-jobhub/actions/oidc/customization/sub --input - <<'EOF'
 {"use_default": false, "include_claim_keys": ["repo", "context", "job_workflow_ref"]}
 EOF
-gh api repos/Hazrat16/smart-jobhub/actions/oidc/customization/sub
 ```
 
-- [ ] The output shows `"use_default": false` and the three keys.
-
-### 5.4 Create the two environments
+**7c. Create the `staging` and `production` environments** (production waits for your approval):
 
 ```bash
 gh api -X PUT repos/Hazrat16/smart-jobhub/environments/staging
@@ -168,49 +189,65 @@ gh api -X PUT repos/Hazrat16/smart-jobhub/environments/production --input - <<EO
 EOF
 ```
 
-- [ ] Settings → Environments lists `staging`, and `production` with you as the required reviewer.
+✅ **You should see,** 🌐 on GitHub → your repo → **Settings**:
+- **Branches:** a rule for `main`
+- **Environments:** `staging`, and `production` with you as the reviewer
 
-## Part 6: Bootstrap AWS (one time)
+> From now on, change code through **pull requests**. The commands below do this for you.
 
-This creates the Terraform state bucket, the GitHub OIDC login, the image registries (ECR), the CI
-roles, and the monthly budget alert. Background: `infra/BOOTSTRAP.md`.
+---
 
-### 6.1 Set the budget email
+# Stage C: AWS base setup (about 20 minutes, one time only)
 
-Edit `infra/bootstrap/terraform.tfvars`:
+This creates the storage for Terraform, the image registry, the logins GitHub uses, and a budget
+alert.
+
+## Step 8. Set the budget alert email
+
+📝 **Edit file:** `infra/bootstrap/terraform.tfvars`
 
 ```hcl
 budget_alert_emails = ["<alert-email>"]
 monthly_budget_usd  = 110
 ```
 
-### 6.2 Apply
+## Step 9. Create the base setup
+
+💻 **Terminal** (a ready terminal)
 
 ```bash
 cd infra/bootstrap
 terraform init
-terraform plan -out bootstrap.tfplan    # read it: ~20 resources to add, 0 to destroy
+terraform plan -out bootstrap.tfplan
 terraform apply bootstrap.tfplan
-terraform output
 ```
 
-- [ ] The apply ends with `Apply complete!`, and `terraform output` shows `state_bucket`,
-      `deployer_role_arns` and the rest.
+✅ **You should see** `Apply complete!` with about 25 resources added and **0 destroyed**.
 
-### 6.3 Move the bootstrap state into S3
+Stay in this folder for steps 10 and 11.
+
+## Step 10. Move Terraform's memory into AWS
+
+💻 **Terminal** (still in `infra/bootstrap`)
 
 ```bash
 cp backend.tf.example backend.tf
 sed -i "s/<ACCOUNT_ID>/$(aws sts get-caller-identity --query Account --output text)/" backend.tf
-terraform init -migrate-state            # answer: yes
-rm -f terraform.tfstate terraform.tfstate.backup
+terraform init -migrate-state
 ```
 
-- [ ] `terraform plan` now says **No changes**, reading state from S3.
+When it asks **"Do you want to copy existing state"**, type `yes`. Then:
 
-### 6.4 Give GitHub the outputs (variables, not secrets)
+```bash
+rm -f terraform.tfstate terraform.tfstate.backup
+terraform plan
+```
 
-Still in `infra/bootstrap`:
+✅ **You should see** `No changes.`
+
+## Step 11. Tell GitHub about the base setup
+
+💻 **Terminal** (still in `infra/bootstrap`)
 
 ```bash
 gh variable set AWS_REGION                  --body ap-south-1
@@ -221,13 +258,6 @@ gh variable set WORKLOAD_BOUNDARY_ARN       --body "$(terraform output -raw work
 gh variable set AWS_API_DEPLOYER_ROLE_ARN   --body "$(terraform output -json deployer_role_arns | jq -r .api)"
 gh variable set AWS_WEB_DEPLOYER_ROLE_ARN   --body "$(terraform output -json deployer_role_arns | jq -r .web)"
 
-gh variable set APP_URL --env staging    --body "https://staging.<your-domain>"
-gh variable set APP_URL --env production --body "https://<your-domain>"
-```
-
-Protect release tags, so a version can never be moved or deleted:
-
-```bash
 gh api -X POST repos/Hazrat16/smart-jobhub/rulesets --input - <<'EOF'
 {"name": "release tags", "target": "tag", "enforcement": "active",
  "conditions": {"ref_name": {"include": ["refs/tags/api-v*", "refs/tags/web-v*"], "exclude": []}},
@@ -235,357 +265,444 @@ gh api -X POST repos/Hazrat16/smart-jobhub/rulesets --input - <<'EOF'
 EOF
 ```
 
-- [ ] `gh variable list` shows 7 variables. Settings → Environments → staging and production each show
-      `APP_URL`.
-- [ ] Check your inbox: AWS Budgets doesn't send a confirmation, but its alerts will come to this address.
-
-### 6.5 Commit the bootstrap changes
+Then save the two changed files to GitHub:
 
 ```bash
 cd ../..
 git checkout -b setup/bootstrap
 git add infra/bootstrap/backend.tf infra/bootstrap/terraform.tfvars
-git commit -m "infra: bootstrap state in S3, budget email"
+git commit -m "infra: bootstrap"
 gh pr create --fill
 gh pr checks --watch && gh pr merge --squash --delete-branch
 git checkout main && git pull
 ```
 
-## Part 7: Resend (email) on your domain
+✅ **You should see:** `gh variable list` shows **7** variables.
 
-Without this, password-reset emails only reach *your own* inbox. (Email verification at sign-up is
-**off** by default, so sign-up works without it. To turn verification on later, set
-`require_email_verification = true` in the `module "env"` block of `infra/envs/<env>/main.tf`.)
+---
 
-1. [ ] Resend → **Domains** → *Add domain* → `<your-domain>`. It shows 3–4 DNS records (MX, TXT/SPF,
-       DKIM).
-2. [ ] Add each record in Route 53: console → Route 53 → Hosted zones → `<your-domain>` → *Create
-       record*. Copy the name, type and value exactly.
-3. [ ] Back in Resend, click *Verify*. It turns **Verified** (usually within minutes).
-4. [ ] Resend → **API Keys** → create a key (`re_...`) with *Sending access*. Keep it for Part 9.
+# Stage D: Email (about 15 minutes)
 
-## Part 8: Configure the environments and create the infrastructure
+## Step 12. Email: get a Resend key
 
-### 8.1 Fill in both environments
+🌐 **Website:** https://resend.com → **API Keys → Create API key** (Sending access). Copy the key
+(`re_...`) for step 17.
 
-`infra/envs/staging/terraform.tfvars`:
+> Without a domain, Resend only sends email **to your own address** (the one you signed up with).
+> Sign-up still works, because email verification is off. Password-reset emails, though, only reach
+> you. Adding a domain later fixes this.
 
-```hcl
-alert_emails = ["<alert-email>"]
-zone_name    = "<your-domain>"
-domain_name  = "staging.<your-domain>"
+---
 
-api_desired_count = 0
-web_desired_count = 0
-```
+# Stage E: Staging (about 1.5 hours)
 
-`infra/envs/prod/terraform.tfvars`:
+## Step 13. Fill in your settings
+
+📝 **Edit file:** `infra/envs/staging/terraform.tfvars`. Only change the email on the first line:
 
 ```hcl
 alert_emails = ["<alert-email>"]
-zone_name    = "<your-domain>"
-domain_name  = "<your-domain>"          # or "app.<your-domain>" (see Part 4)
 ```
 
-Set the email sender (your Resend-verified domain). In **both** `infra/envs/staging/main.tf` and
-`infra/envs/prod/main.tf`, add one line inside `module "env" { ... }`:
+📝 **Edit file:** `infra/envs/prod/terraform.tfvars`, the same way:
 
 ```hcl
-  email_from = "Smart JobHub <no-reply@<your-domain>>"
+alert_emails = ["<alert-email>"]
 ```
 
-> Fill in **both** environments now, even if prod comes later. After every merge, CI also plans prod,
-> and a placeholder domain makes that plan fail. You decide *when* prod is created by when you approve
-> it (8.3).
+Leave the commented-out `zone_name` / `domain_name` lines as they are.
 
-### 8.2 Open a PR and read the plans
+## Step 14. Create staging
+
+💻 **Terminal** (a ready terminal)
 
 ```bash
 git checkout -b setup/environments
 git add infra/envs
-git commit -m "infra: staging and prod values"
+git commit -m "infra: staging and prod settings"
 gh pr create --fill
-```
-
-- [ ] The PR's **infra** checks go green. Open *Details* → the `plan (staging)` and `plan (prod)` jobs →
-      *Summary*. Each shows a plan adding about 60 resources and destroying none.
-
-### 8.3 Merge and create staging
-
-```bash
 gh pr checks --watch && gh pr merge --squash --delete-branch
+git checkout main && git pull
 ```
 
-GitHub → Actions → the **infra** run on `main`:
+🌐 **Website:** GitHub → **Actions** → the newest **infra** run
 
-1. `apply-staging` creates staging. It takes about **15 minutes** (the Valkey cache and the certificate
-   take longest).
-2. `plan-prod` makes the prod plan and shows it in its *Summary*.
-3. `apply-prod` **waits for your approval.** Leave it waiting for now; you'll approve it in Part 11. A
-   waiting job expires after 30 days, and the next infra merge makes a new plan anyway.
+- `apply-staging` creates staging. It takes **about 15 minutes**.
+- `apply-prod` then **waits for approval.** Leave it for now; you'll approve it in step 23.
 
-- [ ] `apply-staging` is green.
-- [ ] Check it's up: `curl -sI https://staging.<your-domain>` gets an answer over HTTPS (a 503 is
-      expected, since nothing is running yet). The certificate is valid in a browser.
-- [ ] **Confirm the alert subscription:** AWS sent "AWS Notification - Subscription Confirmation" to
-      `<alert-email>`. Click the link. No alerts arrive until you do.
+✅ **You should see** `apply-staging` turn green.
 
-## Part 9: Database and secrets for staging
-
-### 9.1 Atlas cluster
-
-In Atlas (https://cloud.mongodb.com):
-
-1. [ ] Create a **project** `job-platform-staging`.
-2. [ ] *Create cluster*: **M0 (Free)**, provider **AWS**, region **Mumbai (ap-south-1)**, name `staging`.
-3. [ ] **Security → Database Access → Add user.** Username `api`, password authentication, with a
-       generated password:
-       `openssl rand -base64 36 | tr -d '/+=' | cut -c1-40`.
-       Under *Specific privileges*, role **readWrite** on database **`job-platform`**.
-4. [ ] **Security → Network Access → Add IP address → `0.0.0.0/0`.** Tasks have no fixed IP; the reason
-       is in `docs/decisions/0004-public-subnets-no-nat.md`.
-5. [ ] *Connect → Drivers* → copy the connection string, put in the password, and add the database
-       name:
-
-```
-mongodb+srv://api:<PASSWORD>@staging.xxxxx.mongodb.net/job-platform?retryWrites=true&w=majority&appName=job-platform-staging
-```
-
-- [ ] (optional) `mongosh "<that string>" --eval 'db.runCommand({ping:1})'` prints `{ ok: 1 }`.
-
-### 9.2 Write the staging secret
-
-**Every key below must be present**, even if empty (`""`), or the api won't start.
+Now get staging's address and tell GitHub about it. 💻 **Terminal** (a ready terminal):
 
 ```bash
-umask 077
-cat > /tmp/staging-api.json <<'EOF'
+STAGING_URL="https://$(aws cloudfront list-distributions \
+  --query "DistributionList.Items[?Comment=='job-platform-staging'].DomainName" --output text)"
+echo "$STAGING_URL"
+gh variable set APP_URL --env staging --body "$STAGING_URL"
+curl -sI "$STAGING_URL"
+```
+
+Write the printed address down. **That's your `<staging-url>`.** The `curl` gets an answer; even a
+`503` is fine at this point, because nothing is running yet.
+
+> CloudFront can take 5–10 minutes to start answering after it's created.
+
+## Step 15. Confirm the alert email
+
+📧 **Email:** open "AWS Notification - Subscription Confirmation" and click **Confirm subscription**.
+Without this, alerts aren't delivered.
+
+## Step 16. Create the staging database
+
+🌐 **Website:** https://cloud.mongodb.com
+
+1. [ ] **New Project** → name it `job-platform-staging`.
+2. [ ] **Create cluster** → **M0 (Free)** → provider **AWS** → region **Mumbai (ap-south-1)** → name
+       it `staging`.
+3. [ ] **Database Access → Add New Database User:**
+       - Username `api`, and click **Autogenerate Secure Password** (copy it)
+       - **Specific Privileges → readWrite** on database **`job-platform`**
+4. [ ] **Network Access → Add IP Address → Allow access from anywhere** (`0.0.0.0/0`).
+5. [ ] **Connect → Drivers** → copy the connection string. Put in your password, and add
+       `job-platform` after `.net/`, so it looks like this:
+
+```
+mongodb+srv://api:PASSWORD@staging.xxxxx.mongodb.net/job-platform?retryWrites=true&w=majority
+```
+
+## Step 17. Save staging's passwords and keys in AWS
+
+**17a.** 💻 **Terminal** (a ready terminal). This creates the file and generates two random secrets:
+
+```bash
+cat > /tmp/staging-api.json <<EOF
 {
-  "MONGODB_URI": "mongodb+srv://api:...@staging.xxxxx.mongodb.net/job-platform?retryWrites=true&w=majority&appName=job-platform-staging",
-  "JWT_SECRET": "REPLACE_1",
-  "ADMIN_BOOTSTRAP_SECRET": "REPLACE_2",
-  "RESEND_API_KEY": "re_...",
-  "CLOUDINARY_CLOUD_NAME": "...",
-  "CLOUDINARY_API_KEY": "...",
-  "CLOUDINARY_API_SECRET": "...",
-  "SSLCOMMERZ_STORE_ID": "your sandbox store id",
-  "SSLCOMMERZ_STORE_PASSWORD": "your sandbox store password",
+  "MONGODB_URI": "PASTE_FROM_STEP_16",
+  "JWT_SECRET": "$(openssl rand -hex 32)",
+  "ADMIN_BOOTSTRAP_SECRET": "$(openssl rand -hex 24)",
+  "RESEND_API_KEY": "PASTE_FROM_STEP_12",
+  "CLOUDINARY_CLOUD_NAME": "PASTE",
+  "CLOUDINARY_API_KEY": "PASTE",
+  "CLOUDINARY_API_SECRET": "PASTE",
+  "SSLCOMMERZ_STORE_ID": "PASTE_SANDBOX_STORE_ID",
+  "SSLCOMMERZ_STORE_PASSWORD": "PASTE_SANDBOX_PASSWORD",
   "GROQ_API_KEY": "",
   "SENTRY_DSN": ""
 }
 EOF
-sed -i "s/REPLACE_1/$(openssl rand -hex 32)/; s/REPLACE_2/$(openssl rand -hex 24)/" /tmp/staging-api.json
-nano /tmp/staging-api.json          # fill in the real values, save
-
-jq . /tmp/staging-api.json >/dev/null && echo "valid JSON"
-aws secretsmanager put-secret-value --secret-id /job-platform/staging/api \
-  --secret-string file:///tmp/staging-api.json
+code /tmp/staging-api.json
 ```
 
-- [ ] Check the keys (not the values) are all there:
-      `aws secretsmanager get-secret-value --secret-id /job-platform/staging/api --query SecretString --output text | jq -r 'keys[]'`
-      lists 11 keys.
-- [ ] Copy `ADMIN_BOOTSTRAP_SECRET` somewhere safe (a password manager); you'll use it in 10.5. Then
-      delete the file: `shred -u /tmp/staging-api.json`.
+(`code` opens the file in VS Code. If that doesn't work, use `nano /tmp/staging-api.json`.)
 
-## Part 10: First release on staging
+**17b.** 📝 **Edit file:** replace every `PASTE…` with the real value and save. Leave `GROQ_API_KEY`
+and `SENTRY_DSN` as `""` if you don't use them. **Don't delete any line.**
 
-### 10.1 Build and register version 1
-
-GitHub → **Actions → deploy-api → Run workflow** (*Use workflow from*: **main**):
-Environment `staging`, Version *(empty)*, Branch `main`. Then do the same with **deploy-web**.
-
-- [ ] Both runs are green, and their summaries say `api-v1` / `web-v1`.
-- [ ] Each run shows a yellow warning: "0 desired tasks, so nothing was started or tested". That's
-      expected for this first run.
-- [ ] GitHub → *Tags* shows `api-v1` and `web-v1`.
-
-### 10.2 Start the services
+**17c.** 💻 **Terminal:** upload it.
 
 ```bash
-git checkout main && git pull && git checkout -b setup/staging-on
-sed -i 's/^api_desired_count = 0/api_desired_count = 1/; s/^web_desired_count = 0/web_desired_count = 1/' \
-  infra/envs/staging/terraform.tfvars
-git commit -am "staging: run one task per service"
-gh pr create --fill
-gh pr checks --watch && gh pr merge --squash --delete-branch
+jq . /tmp/staging-api.json > /dev/null && echo "file OK"
+aws secretsmanager put-secret-value --secret-id /job-platform/staging/api \
+  --secret-string file:///tmp/staging-api.json
+jq -r .ADMIN_BOOTSTRAP_SECRET /tmp/staging-api.json     # copy this into your password manager
+shred -u /tmp/staging-api.json
 ```
 
-- [ ] The **infra** run's `apply-staging` is green (`apply-prod` waits again; leave it).
-- [ ] After 2–3 minutes: `curl -s https://staging.<your-domain>/api/health/ready | jq` shows
-      `"status": "ready"`, `"version": "api-v1"`, `"db": "up"`, `"redis": "up"`.
-- [ ] `https://staging.<your-domain>` loads the site.
+✅ **You should see** `file OK`, then a reply containing `"Name": "/job-platform/staging/api"`.
 
-### 10.3 Mark v1 as tested
+## Step 18. Build version 1
 
-Run **deploy-api** again: environment `staging`, Version **`api-v1`**. Then **deploy-web** with
-**`web-v1`**.
+🌐 **Website:** GitHub → **Actions** → **deploy-api** (left side) → **Run workflow**:
 
-- [ ] Both are green. The commit behind `api-v1` shows a ✓ status `deploy/staging/api-v1`, which makes
-      it promotable to production.
+| Field | Value |
+|---|---|
+| Use workflow from | `main` |
+| Environment | `staging` |
+| Version | *(leave empty)* |
+| Branch | `main` |
 
-### 10.4 (optional) Fill staging with sample data
+Click **Run workflow**. Then do the same with **deploy-web**.
 
-Creates 9 sample accounts (3 employers with companies, 5 jobseekers including one suspended, plus an
-admin), 14 jobs of every type and status, applications at every stage, saved jobs, chats, notifications
-and payments. Every account is on `@smartjobhub.test`. Running it again resets that data; nothing else
-is touched.
+✅ **You should see** both runs turn green, creating **`api-v1`** and **`web-v1`**. A yellow warning
+says "0 desired tasks". That's expected: the servers stay off until step 19.
+
+## Step 19. Switch the staging servers on
+
+💻 **Terminal** (a ready terminal)
+
+```bash
+git checkout -b setup/staging-on
+sed -i 's/^api_desired_count = 0/api_desired_count = 1/; s/^web_desired_count = 0/web_desired_count = 1/' \
+  infra/envs/staging/terraform.tfvars
+git commit -am "staging: turn on"
+gh pr create --fill
+gh pr checks --watch && gh pr merge --squash --delete-branch
+git checkout main && git pull
+```
+
+🌐 **Website:** GitHub → Actions → wait until the **infra** run's `apply-staging` is green
+(`apply-prod` waits again; ignore it). Then wait 2–3 more minutes.
+
+✅ **You should see,** 💻 in the terminal:
+
+```bash
+curl -s <staging-url>/api/health/ready | jq
+```
+
+It shows `"status": "ready"`, `"version": "api-v1"`, `"db": "up"` and `"redis": "up"`. 🌐
+`<staging-url>` opens the website.
+
+## Step 20. Mark version 1 as tested
+
+🌐 **Website:** GitHub → Actions → **deploy-api** → **Run workflow** again, this time with
+**Version `api-v1`**. Then **deploy-web** with **Version `web-v1`**.
+
+✅ **You should see** both green. Only tested versions can go to production.
+
+## Step 21. (Optional) Fill staging with sample data
+
+💻 **Terminal** (a ready terminal). First replace the two `<…>` passwords.
 
 ```bash
 NET=$(aws ecs describe-services --cluster job-platform-staging --services job-platform-staging-api \
   --query 'services[0].networkConfiguration' --output json)
+
 aws ecs run-task --cluster job-platform-staging --launch-type FARGATE \
   --task-definition job-platform-staging-api --network-configuration "$NET" \
   --overrides '{"containerOverrides":[{"name":"app","command":["node","dist/scripts/seedDemo.js"],
     "environment":[{"name":"SEED_DEMO_CONFIRM","value":"yes"},
-                   {"name":"DEMO_PASSWORD","value":"<password for the sample accounts, 10+ chars>"},
-                   {"name":"SEED_ADMIN_PASSWORD","value":"<a different password, 12+ chars>"}]}]}' \
-  --query 'tasks[0].taskArn' --output text
+                   {"name":"DEMO_PASSWORD","value":"<password for sample users, 10+ characters>"},
+                   {"name":"SEED_ADMIN_PASSWORD","value":"<different password for admin, 12+ characters>"}]}]}'
+```
 
+Wait one minute, then:
+
+```bash
 aws logs tail /ecs/job-platform-staging-api --since 5m | grep demo_seeded
 ```
 
-- [ ] The log shows `demo_seeded` with `"users":9,"jobs":14`.
-- [ ] Log in at `https://staging.<your-domain>` with your `DEMO_PASSWORD` as any of these (all
-      `@smartjobhub.test`):
-      - jobseekers: `demo.jobseeker`, `nusrat.jahan`, `rafi.ahmed`, `sadia.islam`
-      - employers: `demo.employer`, `farhana.rahman`, `tanvir.hasan`
+✅ **You should see** `"users":9,"jobs":14`. You can now log in with your `DEMO_PASSWORD` as:
 
-      The admin is `admin@smartjobhub.test`, with `SEED_ADMIN_PASSWORD`.
+| Role | Emails (all end in `@smartjobhub.test`) |
+|---|---|
+| Jobseeker | `demo.jobseeker`, `nusrat.jahan`, `rafi.ahmed`, `sadia.islam` |
+| Employer | `demo.employer`, `farhana.rahman`, `tanvir.hasan` |
+| Admin | `admin`, with `SEED_ADMIN_PASSWORD` |
 
-> These passwords are visible in the task's settings in the ECS console. That's fine for staging
-> sample accounts; don't reuse them. On a laptop, `npm run seed:demo` in `apps/api` does the same
-> against any `MONGODB_URI`.
+## Step 22. Try staging
 
-### 10.5 Try it
+🌐 **Website:** `<staging-url>`
 
-- [ ] Register a user on staging. You're logged in straight away (verification is off).
-- [ ] Create your admin account:
+- [ ] Register a new user. You're logged in straight away.
+- [ ] Create your own admin account. 💻 **Terminal:** paste in the `ADMIN_BOOTSTRAP_SECRET` from
+      step 17:
 
 ```bash
-curl -s -X POST https://staging.<your-domain>/api/auth/bootstrap-admin \
-  -H 'Content-Type: application/json' -H "x-admin-bootstrap-secret: <ADMIN_BOOTSTRAP_SECRET>" \
-  -d '{"email":"you@<your-domain>","password":"<a strong password>","name":"Your Name"}' | jq
+curl -s -X POST <staging-url>/api/auth/bootstrap-admin \
+  -H 'Content-Type: application/json' \
+  -H "x-admin-bootstrap-secret: PASTE_ADMIN_BOOTSTRAP_SECRET" \
+  -d '{"email":"you@example.com","password":"a-strong-password","name":"Your Name"}' | jq
 ```
 
-## Part 11: Production
+---
 
-### 11.1 Create prod's infrastructure
+# Stage F: Production (about 1 hour)
 
-GitHub → Actions → the **latest infra run on `main`** → the waiting **`apply-prod`** job:
+## Step 23. Create production
 
-1. [ ] Open **`plan-prod` → Summary** and read the plan (about 65 resources to add, 0 to destroy).
-2. [ ] *Review deployments* → tick **production** → **Approve and deploy**.
-3. [ ] `apply-prod` is green (about 15 minutes).
+🌐 **Website:** GitHub → **Actions** → the newest **infra** run → the waiting **`apply-prod`** job
 
-> **Alarm emails right after this are expected.** The prod services exist but have no version and no
-> secret values yet, so "no healthy targets" fires until 11.3. If the old `apply-prod` expired, make
-> any small infra PR (for example a comment in `infra/envs/prod/README.md`) to get a fresh plan.
-
-- [ ] Confirm the **prod** alert subscription email as well (a separate topic from staging).
-
-### 11.2 Prod database and secret
-
-Repeat Part 9 with these changes:
-
-- [ ] Atlas project **`job-platform-prod`**, cluster tier **Flex** (it has daily backups), name `prod`,
-      AWS Mumbai. Create a **new** user `api` with a **different** password, and add network access
-      `0.0.0.0/0`.
-- [ ] **Different** values for `JWT_SECRET` and `ADMIN_BOOTSTRAP_SECRET` (generate new ones).
-- [ ] SSLCommerz **live** store credentials. **No live store yet?** Set
-      `sslcommerz_sandbox  = true` in `infra/envs/prod/main.tf` (by PR) until you have one.
-- [ ] One extra key, **`DEMO_PASSWORD`**: at least 10 characters. It becomes the *public* demo login,
-      so never reuse it anywhere.
-
-Create `/tmp/prod-api.json` the same way as in 9.2 (the same 11 keys, with prod values), plus
-`"DEMO_PASSWORD": "..."`. Then:
+1. [ ] Click **Review deployments**, tick **production**, then **Approve and deploy**.
+2. [ ] Wait until it's green (about 15 minutes).
+3. [ ] 📧 Confirm the new alert-subscription email (production has its own).
+4. [ ] 💻 **Terminal:** get production's address and tell GitHub:
 
 ```bash
-jq . /tmp/prod-api.json >/dev/null && echo "valid JSON"
+PROD_URL="https://$(aws cloudfront list-distributions \
+  --query "DistributionList.Items[?Comment=='job-platform-prod'].DomainName" --output text)"
+echo "$PROD_URL"
+gh variable set APP_URL --env production --body "$PROD_URL"
+```
+
+Write it down. **That's your `<prod-url>`.**
+
+> You'll get "ALARM" emails for a while. That's normal: production has nothing running until
+> step 26.
+
+## Step 24. Create the production database
+
+🌐 **Website:** https://cloud.mongodb.com. The same as step 16, except:
+
+- Project **`job-platform-prod`**, cluster tier **Flex** (it has backups), name `prod`, AWS Mumbai
+- A **new** `api` user with a **new** password
+- Network Access `0.0.0.0/0` again
+
+## Step 25. Save production's passwords and keys in AWS
+
+**25a.** 💻 **Terminal** (a ready terminal):
+
+```bash
+cat > /tmp/prod-api.json <<EOF
+{
+  "MONGODB_URI": "PASTE_FROM_STEP_24",
+  "JWT_SECRET": "$(openssl rand -hex 32)",
+  "ADMIN_BOOTSTRAP_SECRET": "$(openssl rand -hex 24)",
+  "RESEND_API_KEY": "PASTE",
+  "CLOUDINARY_CLOUD_NAME": "PASTE",
+  "CLOUDINARY_API_KEY": "PASTE",
+  "CLOUDINARY_API_SECRET": "PASTE",
+  "SSLCOMMERZ_STORE_ID": "PASTE_LIVE_STORE_ID",
+  "SSLCOMMERZ_STORE_PASSWORD": "PASTE_LIVE_PASSWORD",
+  "GROQ_API_KEY": "",
+  "SENTRY_DSN": "",
+  "DEMO_PASSWORD": "PASTE_A_DEMO_PASSWORD"
+}
+EOF
+code /tmp/prod-api.json
+```
+
+**25b.** 📝 **Edit file:** replace the `PASTE…` values and save.
+- `SSLCOMMERZ_*` are your **live** store's details. No live store yet? See "Common problems".
+- `DEMO_PASSWORD` is the public demo login shown in the README. Use a password you use nowhere else.
+
+**25c.** 💻 **Terminal:**
+
+```bash
+jq . /tmp/prod-api.json > /dev/null && echo "file OK"
 aws secretsmanager put-secret-value --secret-id /job-platform/prod/api \
   --secret-string file:///tmp/prod-api.json
-aws secretsmanager get-secret-value --secret-id /job-platform/prod/api \
-  --query SecretString --output text | jq -r 'keys[]'      # 12 keys, including DEMO_PASSWORD
+jq -r .ADMIN_BOOTSTRAP_SECRET /tmp/prod-api.json     # save in your password manager
 shred -u /tmp/prod-api.json
 ```
 
-### 11.3 Promote the tested versions
+## Step 26. Put version 1 live
 
-**Actions → deploy-api → Run workflow:** environment **production**, Version **`api-v1`**.
-It waits for approval: *Review deployments* → approve. Then do **deploy-web** with **`web-v1`**.
+🌐 **Website:** GitHub → Actions → **deploy-api** → **Run workflow**, with environment
+**`production`** and Version **`api-v1`**. Then open the run → **Review deployments** → **Approve**.
+Do the same with **deploy-web** and **`web-v1`**.
 
-- [ ] Both are green.
-- [ ] `curl -s https://<your-domain>/api/health/ready | jq` shows `"version": "api-v1"` and
-      `"status": "ready"`.
-- [ ] `https://<your-domain>` loads, and the alarm emails change to **OK**.
-- [ ] Create the prod admin with the `bootstrap-admin` command from 10.5, using prod's secret and URL.
+✅ **You should see** both green. Then 💻:
 
-### 11.4 Create the demo accounts now (instead of waiting for 03:00)
+```bash
+curl -s <prod-url>/api/health/ready | jq
+```
+
+It shows `"status": "ready"` and `"version": "api-v1"`. 🌐 `<prod-url>` opens, and the
+alarm emails switch to **OK**.
+
+Create your prod admin with the command from step 22, using `<prod-url>` and the **prod**
+`ADMIN_BOOTSTRAP_SECRET`.
+
+## Step 27. Create the demo accounts on production
+
+💻 **Terminal** (a ready terminal). This also happens automatically every night at 03:00; this runs it
+now.
 
 ```bash
 NET=$(aws ecs describe-services --cluster job-platform-prod --services job-platform-prod-api \
   --query 'services[0].networkConfiguration' --output json)
+
 aws ecs run-task --cluster job-platform-prod --launch-type FARGATE \
   --task-definition job-platform-prod-api --network-configuration "$NET" \
-  --overrides '{"containerOverrides":[{"name":"app","command":["node","dist/scripts/seedDemo.js"],"environment":[{"name":"SEED_DEMO_CONFIRM","value":"yes"}]}]}' \
-  --query 'tasks[0].taskArn' --output text
+  --overrides '{"containerOverrides":[{"name":"app","command":["node","dist/scripts/seedDemo.js"],"environment":[{"name":"SEED_DEMO_CONFIRM","value":"yes"}]}]}'
+```
 
+Wait one minute, then:
+
+```bash
 aws logs tail /ecs/job-platform-prod-api --since 5m | grep demo_seeded
 ```
 
-- [ ] The log shows `demo_seeded` with `"users":8,"jobs":14` (no admin on prod: the public demo never gets one).
-- [ ] Log in at `https://<your-domain>` as `demo.employer@smartjobhub.test` with your `DEMO_PASSWORD`.
+✅ **You should see** `"users":8,"jobs":14`. 🌐 Log in at `<prod-url>` as
+`demo.employer@smartjobhub.test` with your `DEMO_PASSWORD`.
 
-## Part 12: Finish up
+---
 
-- [ ] **README.md:** replace `<your-domain>` and `<DEMO_PASSWORD>` (by PR).
-- [ ] **Cost tags:** AWS console → Billing → *Cost allocation tags* → activate `Project` and
-      `Environment`. They cover costs from then on.
-- [ ] **Budget check:** in a day or two, look at Billing → *Bills*. It should be on track for about
-      $120–150/month in total.
-- [ ] **Old repos:** archive `Hazrat16/job-platform` and `Hazrat16/job-platform-frontend` (Settings →
-      Archive), after adding a README line pointing here.
-- [ ] **Restore drill:** put a quarterly reminder in your calendar for `docs/restore-drill.md`. Do the
-      first one once prod has real data.
-- [ ] **Delete the root access key** if you ever created one, and keep the `admin` key only on your laptop.
+# Stage G: Finish (10 minutes)
 
-From now on, releases are: **deploy-<app> → staging (empty version) → test → deploy-<app> → production
-(that version) → approve.** Details in `docs/releasing.md`, and what to do when an alarm fires in
-`docs/runbook.md`.
+## Step 28. Last touches
 
-## Part 13: Stop paying (tear down)
+- [ ] 📝 `README.md`: replace `https://&lt;your-domain&gt;` with your `<prod-url>`, and `<DEMO_PASSWORD>` too, then save it with a pull request
+      (the same commands as in step 19).
+- [ ] 🌐 AWS console → **Billing → Cost allocation tags** → activate `Project` and `Environment`.
+- [ ] 🌐 GitHub: archive the old repos `job-platform` and `job-platform-frontend` (Settings → Archive).
+- [ ] 📅 Add a reminder every 3 months to follow `docs/restore-drill.md` (a backup check).
 
-To pause, set both staging counts to `0` (saves Fargate only; the ALB and Valkey still cost about
-$30/month). To remove an environment completely:
+**You're live.** 🎉
+
+---
+
+# Everyday: releasing a new version
+
+🌐 **Website:** GitHub → Actions
+
+1. **deploy-api** → environment `staging`, version *empty*. This creates `api-v2` on staging.
+2. Test it on `<staging-url>`.
+3. **deploy-api** → environment `production`, version `api-v2` → approve. It's live.
+
+The same goes for **deploy-web**. **To undo a release,** deploy the previous version (e.g. `api-v1`) to
+production. More in `docs/releasing.md`.
+
+# Stop paying
+
+💻 **Terminal** (a ready terminal):
 
 ```bash
-cd infra/envs/staging            # or infra/envs/prod
+cd infra/envs/staging
 terraform init -backend-config="bucket=$(gh variable get TF_STATE_BUCKET)"
 terraform destroy
 ```
 
-For **prod**, first turn off the load balancer's deletion protection: in `infra/envs/prod/main.tf`
-set `deletion_protection = false`, then `terraform apply`, then `terraform destroy`. Secrets are kept
-for 7 days after deletion, so re-creating an environment within a week needs
-`aws secretsmanager restore-secret --secret-id /job-platform/<env>/api` (and `/redis`) first.
+For production:
+1. 📝 In `infra/envs/prod/main.tf`, change `deletion_protection = true` to `false`.
+2. 💻 In `infra/envs/prod`, run the same `terraform init`, then `terraform apply`, then
+   `terraform destroy`.
+3. 🌐 Delete the Atlas clusters on the Atlas website.
 
-Destroy **both** environments before touching `infra/bootstrap` (its state bucket is protected on
-purpose). Atlas clusters are deleted in the Atlas console.
+# Later: add a domain
+
+When you buy one (it's only $3–15 a year):
+
+1. 💻 Put it on Route 53 (a ready terminal):
+   ```bash
+   aws route53 create-hosted-zone --name <your-domain> --caller-reference "setup-$(date +%s)" \
+     --query 'DelegationSet.NameServers' --output text
+   ```
+   🌐 At your registrar, set the domain's **Nameservers** to the 4 names it prints. 💻 Wait until
+   `dig NS <your-domain> +short` shows them.
+2. 📝 In both `infra/envs/*/terraform.tfvars`, uncomment `zone_name` and `domain_name` and fill them
+   in (e.g. `staging.<your-domain>` for staging, `<your-domain>` for prod).
+3. 📝 In both `infra/envs/*/main.tf`, add inside `module "env" { ... }`:
+   `email_from = "Smart JobHub <no-reply@<your-domain>>"`. 🌐 In Resend → **Domains**, add the domain
+   and copy its DNS records into Route 53 (console → Route 53 → your zone → Create record). Then
+   click **Verify**.
+4. 💻 Save with a pull request (like step 19). Then approve prod in GitHub Actions. This switches each
+   environment from CloudFront to the domain: HTTPS certificate, DNS record, the load balancer open
+   to the internet, and CloudFront removed.
+5. 💻 Update the addresses:
+   `gh variable set APP_URL --env staging --body "https://staging.<your-domain>"` and the same with
+   `--env production`.
+
+# Common problems
+
+| You see | Do this |
+|---|---|
+| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | Redo step 7b. Always run workflows from `main`. |
+| GitHub infra jobs are all *skipped* | The variables from step 11 are missing: check `gh variable list`. |
+| `no matching Route 53 Hosted Zone` | A `terraform.tfvars` has `zone_name` / `domain_name` uncommented without a real domain. Comment them out again. |
+| `403 Forbidden` from an `...elb.amazonaws.com` address | Expected: the load balancer only answers CloudFront. Use your `<staging-url>` / `<prod-url>`. |
+| The CloudFront address doesn't answer yet | Wait 5–10 minutes after `apply-staging` / `apply-prod`. |
+| Deploy smoke test fails right after step 14 / 23 | `APP_URL` isn't set yet: redo the `gh variable set APP_URL` line from step 14 / 23. |
+| "branch is not allowed to deploy to production" | Redo step 7a. |
+| API won't start: `did not contain json key …` | A line is missing from the step 17 / 25 file. Fix it, upload it again, then re-run the deploy with the same version. |
+| `/api/health/ready` says `Database not connected` | Check the step 16 / 24 connection string, the password, and Network Access `0.0.0.0/0`. |
+| "has no successful staging deploy" | Do step 20 for that version first. |
+| No live SSLCommerz store yet | 📝 In `infra/envs/prod/main.tf`, set `sslcommerz_sandbox = true`, save it with a pull request, and use your sandbox details in step 25. |
+| Password-reset emails don't arrive | Without a domain they only go to your own Resend address (step 12). Add a domain to fix it. |
+| No alarm emails | Step 15 / 23: confirm the subscription email. |
+| Anything else | `docs/runbook.md` → "Where to look" |
 
 ---
 
-## Troubleshooting
-
-| Symptom | Cause and fix |
-|---|---|
-| `Not authorized to perform sts:AssumeRoleWithWebIdentity` | 5.3 wasn't done, the run wasn't started from **main**, or a variable from 6.4 is wrong. Check `gh api repos/Hazrat16/smart-jobhub/actions/oidc/customization/sub`. |
-| Infra `plan`/`apply` jobs are **skipped** | The GitHub variables from 6.4 are missing. |
-| `plan-prod` fails with `no matching Route 53 Hosted Zone` | `infra/envs/prod/terraform.tfvars` still has `example.com` (8.1), or the zone isn't in this account (Part 4). |
-| `apply-staging` hangs on `aws_acm_certificate_validation` | The name servers at the registrar don't point to Route 53 yet. `dig NS <your-domain> +short` must list the awsdns servers. |
-| Deploy to production is rejected: "branch is not allowed to deploy" | Branch protection on `main` is missing (5.2). |
-| api task stops: `ResourceInitializationError ... did not contain json key X` | Key `X` is missing from the secret. Add it (Part 9 / 11.2), then run the deploy again for the same version. |
-| `/api/health/ready` returns 503 `Database not connected` | Wrong `MONGODB_URI`, a missing `0.0.0.0/0` in Atlas Network Access, or a user without `readWrite` on `job-platform`. |
-| Deploy says "Version api-vN has no successful staging deploy" | Deploy that version to staging first, with the services running (10.3). |
-| Password-reset (or verification) emails don't arrive | The Resend domain isn't *Verified* (Part 7), `email_from` isn't set (8.1), or `RESEND_API_KEY` is wrong. Check `aws logs tail /ecs/job-platform-<env>-api --since 30m \| grep -i email`. |
-| No alarm emails at all | The SNS subscription wasn't confirmed (8.3 / 11.1). |
-| Anything else | `docs/runbook.md` → *Where to look* (logs, ECS events, why tasks stopped). |
+*For background: `infra/BOOTSTRAP.md` (what step 9 creates), `infra/DATA.md` (database and secrets),
+`docs/releasing.md`, `docs/runbook.md`, `docs/architecture.md`.*

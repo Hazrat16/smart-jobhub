@@ -13,9 +13,9 @@ output "web_target_group_arn" {
   value       = aws_lb_target_group.web.arn
 }
 
-output "https_listener_arn" {
-  description = "HTTPS listener ARN."
-  value       = aws_lb_listener.https.arn
+output "listener_arn" {
+  description = "Listener that carries app traffic (HTTPS with a domain, HTTP from CloudFront without)."
+  value       = local.app_listener_arn
 }
 
 output "arn_suffix" {
@@ -29,8 +29,8 @@ output "dns_name" {
 }
 
 output "url" {
-  description = "Public URL of the environment."
-  value       = "https://${var.domain_name}"
+  description = "Public URL with a domain; null in CloudFront mode (the CloudFront URL is public then)."
+  value       = local.use_domain ? "https://${var.domain_name}" : null
 }
 
 output "api_target_group_arn_suffix" {

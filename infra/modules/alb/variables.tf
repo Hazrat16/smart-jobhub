@@ -14,13 +14,28 @@ variable "subnet_ids" {
 }
 
 variable "zone_name" {
-  description = "Existing Route 53 public hosted zone, e.g. example.com."
+  description = "Existing Route 53 public hosted zone, e.g. example.com. null = no domain (CloudFront mode)."
   type        = string
+  default     = null
 }
 
 variable "domain_name" {
-  description = "Host name served by this ALB, e.g. staging.example.com (must be in zone_name)."
+  description = "Host name served by this ALB, e.g. staging.example.com (must be in zone_name). null = no domain (CloudFront mode)."
   type        = string
+  default     = null
+}
+
+variable "origin_verify_header" {
+  description = "Header CloudFront adds to every request to the ALB (CloudFront mode)."
+  type        = string
+  default     = "X-Origin-Verify"
+}
+
+variable "origin_verify_secret" {
+  description = "Value of origin_verify_header. Requests without it get a 403 (CloudFront mode)."
+  type        = string
+  default     = null
+  sensitive   = true
 }
 
 variable "api_port" {

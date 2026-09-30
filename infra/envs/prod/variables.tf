@@ -10,13 +10,15 @@ variable "alert_emails" {
 }
 
 variable "zone_name" {
-  description = "Existing Route 53 public hosted zone, e.g. example.com."
+  description = "Existing Route 53 public hosted zone, e.g. example.com. Leave unset for no domain (CloudFront URL)."
   type        = string
+  default     = null
 }
 
 variable "domain_name" {
-  description = "Host name of production, e.g. example.com or app.example.com."
+  description = "Host name of production, e.g. example.com or app.example.com. Leave unset for no domain (CloudFront URL)."
   type        = string
+  default     = null
 }
 
 variable "api_min_count" {

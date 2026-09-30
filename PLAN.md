@@ -278,6 +278,14 @@ README.md                 live demo, badges, diagram, "production readiness" sec
   every type, and payments. Idempotent; it only resets `@smartjobhub.test` data. setup.md 10.4 seeds
   staging.
 
+- **No-domain mode (CloudFront).** `zone_name` / `domain_name` are optional. Without them each
+  environment is served on `https://<id>.cloudfront.net` (`modules/cdn`: CachingDisabled + AllViewer,
+  hashed `/_next/static/*` cached, 5xx never cached). The ALB then has no certificate: it accepts
+  HTTP only from CloudFront's origin-facing prefix list, and only with a per-env secret header
+  (`X-Origin-Verify`); anything else gets a 403. `TRUST_PROXY_HOPS` is 2 in this mode. Adding a domain
+  later switches the environment back to ACM + Route 53 (setup.md, "Later: add a domain").
+  Trade-offs: the CloudFront → ALB hop is HTTP, and Resend can only email the account owner.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.

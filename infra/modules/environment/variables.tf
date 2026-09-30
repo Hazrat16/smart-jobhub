@@ -20,13 +20,20 @@ variable "vpc_cidr" {
 }
 
 variable "zone_name" {
-  description = "Existing Route 53 public hosted zone, e.g. example.com."
+  description = "Existing Route 53 public hosted zone, e.g. example.com. null (with domain_name null) = no domain: served on a CloudFront URL."
   type        = string
+  default     = null
 }
 
 variable "domain_name" {
-  description = "Host name of this environment, e.g. staging.example.com or example.com."
+  description = "Host name of this environment, e.g. staging.example.com. null = no domain: served on https://<id>.cloudfront.net."
   type        = string
+  default     = null
+
+  validation {
+    condition     = (var.domain_name == null) == (var.zone_name == null)
+    error_message = "Set both zone_name and domain_name, or neither."
+  }
 }
 
 variable "image_tag" {

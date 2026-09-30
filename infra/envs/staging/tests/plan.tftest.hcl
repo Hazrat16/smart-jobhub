@@ -77,6 +77,14 @@ mock_provider "aws" {
     defaults = { arn = "arn:aws:sns:ap-south-1:123456789012:job-platform-staging-alerts" }
   }
 
+  mock_data "aws_ec2_managed_prefix_list" {
+    defaults = { id = "pl-3b927c52" }
+  }
+
+  mock_resource "aws_cloudfront_distribution" {
+    defaults = { domain_name = "d1abc234xyz.cloudfront.net", id = "E1ABC234XYZ" }
+  }
+
   mock_resource "aws_acm_certificate" {
     defaults = {
       arn = "arn:aws:acm:ap-south-1:123456789012:certificate/mock"
@@ -134,5 +142,24 @@ run "staging_plan" {
   assert {
     condition     = output.settings.demo_reset_schedule == null
     error_message = "No demo accounts on staging."
+  }
+}
+
+run "no_domain_cloudfront" {
+  command = apply
+
+  variables {
+    zone_name   = null
+    domain_name = null
+  }
+
+  assert {
+    condition     = output.url == "https://d1abc234xyz.cloudfront.net"
+    error_message = "Without a domain, the public URL is the CloudFront address."
+  }
+
+  assert {
+    condition     = output.settings.entry_point == "cloudfront"
+    error_message = "Without a domain, CloudFront is the entry point."
   }
 }

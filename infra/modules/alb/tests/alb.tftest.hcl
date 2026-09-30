@@ -23,6 +23,10 @@ mock_provider "aws" {
     defaults = { arn = "arn:aws:elasticloadbalancing:ap-south-1:123456789012:listener/app/t/0123456789abcdef/0123456789abcdef" }
   }
 
+  mock_data "aws_ec2_managed_prefix_list" {
+    defaults = { id = "pl-3b927c52" }
+  }
+
   mock_resource "aws_acm_certificate" {
     defaults = {
       arn = "arn:aws:acm:ap-south-1:123456789012:certificate/mock"
@@ -58,7 +62,7 @@ run "routing" {
   }
 
   assert {
-    condition     = one(aws_lb_listener.https.default_action).target_group_arn == aws_lb_target_group.web.arn
+    condition     = one(aws_lb_listener.https[0].default_action).target_group_arn == aws_lb_target_group.web.arn
     error_message = "Everything else must go to web."
   }
 
@@ -85,5 +89,48 @@ run "routing" {
   assert {
     condition     = aws_route53_record.validation["staging.example.com"].name == "_x.staging.example.com."
     error_message = "ACM validation record must come from the certificate's validation options."
+  }
+}
+
+run "cloudfront_mode" {
+  command = apply
+
+  variables {
+    zone_name            = null
+    domain_name          = null
+    origin_verify_secret = "s3cret-header-value"
+  }
+
+  assert {
+    condition     = length(aws_acm_certificate.this) == 0 && length(aws_route53_record.alias) == 0 && length(aws_lb_listener.https) == 0
+    error_message = "No certificate, DNS record or HTTPS listener without a domain."
+  }
+
+  assert {
+    condition     = length(aws_vpc_security_group_ingress_rule.alb) == 0 && aws_vpc_security_group_ingress_rule.cloudfront[0].prefix_list_id == "pl-3b927c52"
+    error_message = "Without a domain, only CloudFront's prefix list may reach the ALB (no 0.0.0.0/0)."
+  }
+
+  assert {
+    condition     = one(aws_lb_listener.http.default_action).type == "fixed-response" && one(one(aws_lb_listener.http.default_action).fixed_response).status_code == "403"
+    error_message = "Requests without the secret header must get a 403."
+  }
+
+  assert {
+    condition = alltrue([
+      for r in [aws_lb_listener_rule.api, aws_lb_listener_rule.web[0]] :
+      anytrue([for c in r.condition : length(c.http_header) > 0 && one(c.http_header).values == toset(["s3cret-header-value"])])
+    ])
+    error_message = "Both forwarding rules must require the secret origin header."
+  }
+
+  assert {
+    condition     = aws_lb_listener_rule.api.listener_arn == aws_lb_listener.http.arn
+    error_message = "App traffic comes in on the HTTP listener from CloudFront."
+  }
+
+  assert {
+    condition     = one(aws_lb_target_group.api.stickiness).enabled
+    error_message = "Sticky sessions still needed behind CloudFront."
   }
 }
