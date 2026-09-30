@@ -26,6 +26,7 @@ import {
 } from "./services/notificationService.js";
 import mongoose from "mongoose";
 import { logError, logInfo } from "./utils/logger.js";
+import { HttpError } from "./utils/http.js";
 import { snapshotMetrics, trackHttp } from "./utils/metrics.js";
 import { pingRedis } from "./config/redis.js";
 logInfo("app.ts loaded");
@@ -45,8 +46,9 @@ app.use(
         callback(null, true);
         return;
       }
-      logError("cors_origin_rejected", { origin });
-      callback(new Error("Not allowed by CORS"));
+      logError("cors_origin_rejected", { origin, allowedOrigins });
+      // A 403 the error handler understands, not a generic 500.
+      callback(new HttpError(403, "FORBIDDEN", `Origin not allowed: ${origin}`));
     },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],

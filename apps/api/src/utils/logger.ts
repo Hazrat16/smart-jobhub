@@ -8,8 +8,27 @@ type LogPayload = {
   [key: string]: unknown;
 };
 
+/** Error objects stringify to "{}" (their fields aren't enumerable); log what matters instead. */
+function errorAware(_key: string, value: unknown): unknown {
+  if (value instanceof Error) {
+    const extra = value as Error & { code?: unknown; status?: unknown };
+    return {
+      name: value.name,
+      message: value.message,
+      ...(extra.code !== undefined ? { code: extra.code } : {}),
+      ...(extra.status !== undefined ? { status: extra.status } : {}),
+      stack: value.stack,
+    };
+  }
+  return value;
+}
+
+export function serializeLog(payload: Record<string, unknown>): string {
+  return JSON.stringify(payload, errorAware);
+}
+
 function write(payload: LogPayload) {
-  const serialized = JSON.stringify(payload);
+  const serialized = serializeLog(payload);
   if (payload.level === "error") {
     console.error(serialized);
     return;
