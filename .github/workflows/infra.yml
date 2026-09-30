@@ -9,8 +9,12 @@ on:
 permissions:
   contents: read
 
+# PRs: a new push to the same PR cancels its older run. Pushes to main: no
+# workflow-level lock (a run waiting for prod approval would block every later
+# run). The per-job terraform-staging / terraform-prod groups below still make
+# applies take turns.
 concurrency:
-  group: infra-${{ github.ref }}
+  group: ${{ github.event_name == 'pull_request' && format('infra-{0}', github.ref) || format('infra-run-{0}', github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
