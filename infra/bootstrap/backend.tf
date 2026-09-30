@@ -1,0 +1,12 @@
+# Copy to backend.tf after the first apply, fill in the bucket, then run:
+#   terraform init -migrate-state
+# (see infra/BOOTSTRAP.md, step 5)
+terraform {
+  backend "s3" {
+    bucket       = "job-platform-tfstate-388309267935"
+    key          = "bootstrap/terraform.tfstate"
+    region       = "ap-south-1"
+    encrypt      = true
+    use_lockfile = true
+  }
+}
