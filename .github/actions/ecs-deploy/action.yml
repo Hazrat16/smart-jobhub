@@ -47,7 +47,7 @@ runs:
         IMAGE: ${{ inputs.image }}
         VERSION: ${{ inputs.version }}
         TIMEOUT_SECONDS: ${{ inputs.timeout-seconds }}
-      run: ${{ github.action_path }}/deploy.sh
+      run: bash "${{ github.action_path }}/deploy.sh"
 
     - name: Smoke test
       if: inputs.smoke-url != '' && steps.deploy.outputs.desired_count != '0'

@@ -766,6 +766,7 @@ When you buy one (it's only $3–15 a year):
 | "has no successful staging deploy" | Do step 20 for that version first. |
 | No live SSLCommerz store yet | 📝 In `infra/envs/prod/main.tf`, set `sslcommerz_sandbox = true`, save it with a pull request, and use your sandbox details in step 25. |
 | Password-reset emails don't arrive | Without a domain they only go to your own Resend address (step 12). Add a domain to fix it. |
+| A run says "waiting for infra #N to complete" | An older run is waiting at `apply-prod` for approval. Open infra #N and **approve** it (if you want that prod change) or **Cancel workflow**. The newer run then continues. |
 | No alarm emails | Step 15 / 23: confirm the subscription email. |
 | Anything else | `docs/runbook.md` → "Where to look" |
 

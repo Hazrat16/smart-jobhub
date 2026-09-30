@@ -57,7 +57,7 @@ jobs:
           VERSION: ${{ inputs.version }}
           BRANCH: ${{ inputs.branch }}
           GH_TOKEN: ${{ github.token }}
-        run: .github/scripts/resolve-release.sh
+        run: bash .github/scripts/resolve-release.sh
 
   staging:
     needs: resolve
