@@ -129,3 +129,15 @@ variable "demo_reset_schedule" {
   type        = string
   default     = null
 }
+
+variable "email_from" {
+  description = "Sender for verification and reset emails, e.g. \"Smart JobHub <no-reply@example.com>\". Its domain must be verified in Resend. null = Resend's test sender, which only delivers to the Resend account owner."
+  type        = string
+  default     = null
+}
+
+variable "require_email_verification" {
+  description = "Require users to click the verification email before they can log in. Off: sign-up logs straight in and no email is sent."
+  type        = bool
+  default     = false
+}

@@ -265,6 +265,19 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - **Owner:** archive `Hazrat16/job-platform` and `Hazrat16/job-platform-frontend`, with a README line:
   "Moved to https://github.com/Hazrat16/smart-jobhub (apps/api | apps/web), history preserved."
 
+### Post-setup changes
+
+- **Email verification is off by default** (`REQUIRE_EMAIL_VERIFICATION`, Terraform
+  `require_email_verification`). Sign-up creates a verified account and returns a session (the web app
+  already logs straight in when it gets one); login doesn't check `isVerified`. Set it to true to restore
+  the old flow. Also fixed: the verification link was hardcoded to `localhost`, and the sender is now
+  `EMAIL_FROM` (`email_from`).
+- **Sample data** (`seedDemo.ts`): 3 employers + companies, 5 jobseekers (one suspended) with full
+  profiles, an optional admin (`SEED_ADMIN_PASSWORD`, never in prod), 14 jobs (all types and statuses,
+  one boosted, back-dated), 11 applications with status history, saved jobs, 4 chats, notifications of
+  every type, and payments. Idempotent; it only resets `@smartjobhub.test` data. setup.md 10.4 seeds
+  staging.
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.

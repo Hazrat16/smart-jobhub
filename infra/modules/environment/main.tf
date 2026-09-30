@@ -86,7 +86,7 @@ module "api" {
   log_retention_days       = var.log_retention_days
   permissions_boundary_arn = local.workload_boundary_arn
 
-  environment = {
+  environment = merge({
     NODE_ENV              = "production"
     PORT                  = "5000"
     HOST                  = "0.0.0.0"
@@ -96,8 +96,9 @@ module "api" {
     CORS_ALLOWED_ORIGINS  = local.public_url
     SSLCOMMERZ_IS_SANDBOX = tostring(var.sslcommerz_sandbox)
     # NODE_ENV is "production" everywhere; this tells Sentry which env it is.
-    SENTRY_ENVIRONMENT = var.environment == "prod" ? "production" : var.environment
-  }
+    SENTRY_ENVIRONMENT         = var.environment == "prod" ? "production" : var.environment
+    REQUIRE_EMAIL_VERIFICATION = tostring(var.require_email_verification)
+  }, var.email_from == null ? {} : { EMAIL_FROM = var.email_from })
 
   secrets = merge(
     { for k in concat(var.api_secret_keys, var.demo_reset_schedule == null ? [] : ["DEMO_PASSWORD"]) : k => { arn = module.api_secret.arn, key = k } },

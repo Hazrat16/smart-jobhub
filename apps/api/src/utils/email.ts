@@ -11,6 +11,17 @@ const RESEND_TEST_EMAIL =
 const IS_DEV =
   process.env["NODE_ENV"] === "development" || !process.env["NODE_ENV"];
 
+// Read per call (not at import) so tests and late-loaded env vars work.
+// Resend's onboarding@resend.dev sender only delivers to the account owner; set
+// EMAIL_FROM to an address on a domain verified in Resend for real users.
+const emailFrom = () => process.env["EMAIL_FROM"] || "Job Platform <onboarding@resend.dev>";
+
+/** Public link for the verify-email endpoint (API_PUBLIC_BASE_URL is the site's URL in AWS). */
+export function verificationLink(token: string): string {
+  const base = (process.env["API_PUBLIC_BASE_URL"] || "http://localhost:5000").replace(/\/+$/, "");
+  return `${base}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
+}
+
 const getEffectiveRecipient = (requestedTo: string) => {
   if (IS_DEV) {
     return RESEND_TEST_EMAIL;
@@ -19,11 +30,11 @@ const getEffectiveRecipient = (requestedTo: string) => {
 };
 
 export const sendVerificationEmail = async (to: string, token: string) => {
-  const link = `http://localhost:5000/api/auth/verify-email?token=${token}`;
+  const link = verificationLink(token);
   const effectiveTo = getEffectiveRecipient(to);
   try {
     const { data, error } = await resend.emails.send({
-      from: "Job Platform <onboarding@resend.dev>",
+      from: emailFrom(),
       to: effectiveTo,
       subject: "Verify your email",
       html: `<p>Please verify your email by clicking <a href="${link}">this link</a>.</p>${
@@ -50,7 +61,7 @@ export const sendResetPasswordEmail = async (to: string, link: string) => {
   const effectiveTo = getEffectiveRecipient(to);
   try {
     const { error, data } = await resend.emails.send({
-      from: "Job Platform <onboarding@resend.dev>", // ✅ use a verified sender domain from Resend
+      from: emailFrom(),
       to: effectiveTo,
       subject: "Reset your password",
       html: `<p>You requested a password reset. Click <a href="${link}">here</a> to reset your password. This link will expire in 1 hour.</p>${

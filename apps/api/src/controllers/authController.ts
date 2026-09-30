@@ -13,14 +13,22 @@ export const registerUser = async (req: Request, res: Response) => {
   const { name, email, password, role } = req.body;
   const photoURL = getUploadedFileUrl(req.file);
 
-  const result = await authService.registerUser({
-    name,
-    email,
-    password,
-    role,
-    ...(photoURL ? { photoURL } : {}),
-  });
-  return ok(res, result, "User registered. Check email to verify.", 201);
+  const result = await authService.registerUser(
+    {
+      name,
+      email,
+      password,
+      role,
+      ...(photoURL ? { photoURL } : {}),
+    },
+    getRequestClientInfo(req),
+  );
+  if (result.session) {
+    // Verification is off: signed in straight away, same response shape as login.
+    setRefreshCookie(res, result.session.refreshToken);
+    return ok(res, { token: result.session.accessToken, user: result.session.user }, "Registration successful", 201);
+  }
+  return ok(res, { email: result.email }, "User registered. Check email to verify.", 201);
 };
 
 export const verifyEmail = async (req: Request, res: Response) => {

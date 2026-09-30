@@ -26,13 +26,40 @@ export type RegisterInput = {
   photoURL?: string;
 };
 
-export async function registerUser(input: RegisterInput): Promise<{ email: string }> {
+/**
+ * Email verification is off unless REQUIRE_EMAIL_VERIFICATION=true. When off, new
+ * accounts are verified at sign-up (no email is sent) and login doesn't check it.
+ * Read per call so it can be switched without a code change.
+ */
+export function emailVerificationRequired(): boolean {
+  return process.env["REQUIRE_EMAIL_VERIFICATION"] === "true";
+}
+
+export type AuthSession = { accessToken: string; refreshToken: string; user: PublicUser };
+
+export async function registerUser(
+  input: RegisterInput,
+  clientInfo: ClientInfo,
+): Promise<{ email: string; session?: AuthSession }> {
   const existingUser = await User.findOne({ email: input.email });
   if (existingUser) {
     throw new HttpError(409, "CONFLICT", "Email already exists");
   }
 
   const hashedPassword = await bcrypt.hash(input.password, BCRYPT_ROUNDS);
+
+  if (!emailVerificationRequired()) {
+    const user = await User.create({
+      name: input.name,
+      email: input.email,
+      password: hashedPassword,
+      role: input.role,
+      isVerified: true,
+      photo: input.photoURL,
+    });
+    return { email: input.email, session: await startSession(user, clientInfo) };
+  }
+
   const verificationToken = crypto.randomBytes(32).toString("hex");
 
   await User.create({
@@ -88,9 +115,9 @@ export async function loginUser(
   email: string,
   password: string,
   clientInfo: ClientInfo,
-): Promise<{ accessToken: string; refreshToken: string; user: PublicUser }> {
+): Promise<AuthSession> {
   const user = await User.findOne({ email });
-  if (!user || !user.isVerified) {
+  if (!user || (emailVerificationRequired() && !user.isVerified)) {
     throw new HttpError(400, "BAD_REQUEST", "Invalid credentials or email not verified");
   }
 
@@ -99,6 +126,11 @@ export async function loginUser(
     throw new HttpError(400, "BAD_REQUEST", "Invalid credentials");
   }
 
+  return startSession(user, clientInfo);
+}
+
+/** New refresh-token session plus an access token for it (login and sign-up). */
+async function startSession(user: InstanceType<typeof User>, clientInfo: ClientInfo): Promise<AuthSession> {
   const refreshToken = generateRefreshToken();
   const session = await Session.create({
     userId: user._id,

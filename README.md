@@ -18,6 +18,10 @@ keyless CI/CD and versioned, gated releases.
 | Jobseeker | `demo.jobseeker@smartjobhub.test` | `<DEMO_PASSWORD>` |
 | Employer | `demo.employer@smartjobhub.test` | `<DEMO_PASSWORD>` |
 
+More sample employers and jobseekers (with companies, applications at every stage, chats and
+notifications) use the same password: `farhana.rahman@`, `tanvir.hasan@`, `nusrat.jahan@`,
+`rafi.ahmed@`, `sadia.islam@smartjobhub.test`.
+
 The demo accounts are shared, and everything they change is reset every night at 03:00 (Dhaka).
 Job boosting is a live SSLCommerz checkout on this site, so look, but don't pay.
 
@@ -98,6 +102,8 @@ cd apps/api && MONGODB_URI=mongodb://127.0.0.1:27017/job-platform \
 Tests: `cd apps/api && docker run -d -p 27099:27017 mongo:7.0 && npm test`.
 
 ## Setting up AWS from scratch
+
+**Follow [setup.md](setup.md)**: every step in order, with checks. The background docs:
 
 1. [infra/BOOTSTRAP.md](infra/BOOTSTRAP.md): state bucket, OIDC, ECR, CI roles, budget (one-time, by hand).
 2. [infra/envs/staging/README.md](infra/envs/staging/README.md) and [infra/envs/prod/README.md](infra/envs/prod/README.md).
