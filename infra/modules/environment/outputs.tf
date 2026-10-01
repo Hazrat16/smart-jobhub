@@ -54,3 +54,13 @@ output "alerts_topic_arn" {
   description = "SNS topic that receives alarms and failed-deployment events."
   value       = module.monitoring.topic_arn
 }
+
+output "observability" {
+  description = "Prometheus/Loki/Grafana stack, or null when observability_enabled is false."
+  value = var.observability_enabled ? {
+    grafana_service    = module.observability[0].grafana_service_name
+    grafana_secret_arn = module.observability[0].grafana_secret_arn
+    namespace          = module.observability[0].namespace
+    bucket             = module.observability[0].bucket_name
+  } : null
+}

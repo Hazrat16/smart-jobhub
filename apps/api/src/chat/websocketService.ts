@@ -421,6 +421,11 @@ export class WebSocketService {
     this.io.to(`user:${userId}`).emit(event, data);
   }
 
+  /** Sockets connected to THIS task (not cluster-wide), for the metrics gauge. */
+  public connectedClientCount(): number {
+    return this.io.engine.clientsCount;
+  }
+
   /**
    * Send message to conversation room
    */

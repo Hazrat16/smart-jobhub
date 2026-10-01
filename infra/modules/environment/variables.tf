@@ -148,3 +148,9 @@ variable "require_email_verification" {
   type        = bool
   default     = false
 }
+
+variable "observability_enabled" {
+  description = "Run Prometheus, Loki and Grafana in this environment (modules/observability). Adds about $10-30/month."
+  type        = bool
+  default     = false
+}

@@ -77,6 +77,23 @@ mock_provider "aws" {
     defaults = { arn = "arn:aws:sns:ap-south-1:123456789012:job-platform-staging-alerts" }
   }
 
+  # Observability stack (modules/observability).
+  mock_resource "aws_service_discovery_private_dns_namespace" {
+    defaults = { arn = "arn:aws:servicediscovery:ap-south-1:123456789012:namespace/ns-mock", id = "ns-mock" }
+  }
+
+  mock_resource "aws_service_discovery_service" {
+    defaults = { arn = "arn:aws:servicediscovery:ap-south-1:123456789012:service/srv-mock" }
+  }
+
+  mock_resource "aws_s3_bucket" {
+    defaults = { arn = "arn:aws:s3:::job-platform-staging-observability-123456789012" }
+  }
+
+  mock_resource "aws_efs_file_system" {
+    defaults = { arn = "arn:aws:elasticfilesystem:ap-south-1:123456789012:file-system/fs-mock" }
+  }
+
   mock_data "aws_ec2_managed_prefix_list" {
     defaults = { id = "pl-3b927c52" }
   }
@@ -147,6 +164,11 @@ run "staging_plan" {
   assert {
     condition     = output.settings.demo_reset_schedule == null
     error_message = "No demo accounts on staging."
+  }
+
+  assert {
+    condition     = output.observability != null && output.observability.namespace == "job-platform-staging.internal"
+    error_message = "Staging runs the observability stack, named under job-platform-staging.internal."
   }
 }
 

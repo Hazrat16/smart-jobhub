@@ -1,0 +1,93 @@
+# Evaluated by Prometheus and listed in Grafana (Alerting > Alert rules). Locally
+# there is no Alertmanager, so they show as firing but notify nobody.
+groups:
+  - name: api
+    rules:
+      - alert: ApiDown
+        # absent(): on AWS, targets come from Cloud Map, so with no running task
+        # there is no `up` series at all rather than one at 0.
+        expr: up{job="api"} == 0 or absent(up{job="api"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: The API is not answering /metrics, or no API task is running.
+
+      - alert: ApiHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "More than 5% of API requests return 5xx ({{ $value | humanizePercentage }})."
+
+      - alert: ApiHighLatencyP95
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "API p95 latency is {{ $value | humanizeDuration }} (threshold 1s)."
+
+      - alert: ApiEventLoopLag
+        expr: nodejs_eventloop_lag_p99_seconds > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Event loop p99 lag is {{ $value | humanizeDuration }}; the process is CPU-bound or blocked."
+
+      - alert: ApiDependencyDown
+        expr: app_dependency_up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "The API cannot reach {{ $labels.dependency }}."
+
+  - name: queues
+    rules:
+      - alert: EmailQueueBacklog
+        expr: email_queue_jobs{state="waiting"} > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value }} emails waiting; is the email worker running?"
+
+      - alert: EmailJobsFailing
+        expr: increase(email_queue_jobs{state="failed"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: Email jobs exhausted their retries in the last 15 minutes.
+
+  - name: datastores
+    rules:
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: The Redis exporter cannot reach Redis.
+
+      - alert: RedisMemoryHigh
+        # maxmemory is 0 (unlimited) in local dev, so this only fires where a limit is set.
+        expr: redis_memory_max_bytes > 0 and redis_memory_used_bytes / redis_memory_max_bytes > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Redis is above 80% of maxmemory; with noeviction, 100% means failed writes.
+
+      - alert: MongoDown
+        expr: mongodb_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: The MongoDB exporter cannot reach MongoDB.

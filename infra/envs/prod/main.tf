@@ -19,4 +19,8 @@ module "env" {
 
   # Public demo logins (README), reset nightly at 03:00 Dhaka. Needs DEMO_PASSWORD in the api secret.
   demo_reset_schedule = "cron(0 3 * * ? *)"
+
+  # Prometheus, Loki and Grafana (docs/observability.md). Off until prod is live and the
+  # budget allows: about $30/month on-demand. CloudWatch alarms and Sentry cover prod meanwhile.
+  observability_enabled = false
 }

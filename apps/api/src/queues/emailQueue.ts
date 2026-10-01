@@ -87,6 +87,27 @@ export async function enqueueEmail(data: EmailJobData): Promise<boolean> {
   return false;
 }
 
+const COUNTS_TIMEOUT_MS = 1_000;
+export const EMAIL_QUEUE_STATES = ["waiting", "active", "delayed", "failed", "completed"] as const;
+
+/**
+ * Job counts per state for the metrics endpoint, or null when there is no queue
+ * or Redis doesn't answer in time. Same reason as ENQUEUE_TIMEOUT_MS: without a
+ * timeout a down Redis would hang every Prometheus scrape.
+ */
+export async function getEmailQueueCounts(): Promise<Record<string, number> | null> {
+  const q = getQueue();
+  if (!q) return null;
+  const countsPromise = q.getJobCounts(...EMAIL_QUEUE_STATES);
+  countsPromise.catch(() => undefined);
+  return Promise.race([
+    countsPromise.catch(() => null),
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), COUNTS_TIMEOUT_MS).unref();
+    }),
+  ]);
+}
+
 export async function closeEmailQueue(): Promise<void> {
   if (queue) {
     await queue.close();

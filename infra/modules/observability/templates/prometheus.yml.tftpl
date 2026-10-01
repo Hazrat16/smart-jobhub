@@ -1,0 +1,30 @@
+# Rendered by Terraform (modules/observability). Tasks are found through Cloud
+# Map DNS: every running task of a service is an A record under its name.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: ${environment}
+
+rule_files:
+  - /etc/prometheus/config/alerts.yml
+
+scrape_configs:
+  - job_name: api
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: ["api.${namespace}"]
+        type: A
+        port: 5000
+        refresh_interval: 30s
+
+  - job_name: loki
+    dns_sd_configs:
+      - names: ["loki.${namespace}"]
+        type: A
+        port: 3100
+        refresh_interval: 30s
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

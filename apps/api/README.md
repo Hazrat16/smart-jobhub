@@ -67,6 +67,14 @@ Starts MongoDB, Redis and the API with hot reload (the `development` stage of th
 `Dockerfile`). The production image is the default `Dockerfile` target:
 `docker build -t job-platform-api .`
 
+To also run Prometheus, Loki and Grafana (metrics, logs and a dashboard at
+http://localhost:3001), add the observability file. See
+[docs/observability.md](../../docs/observability.md).
+
+```bash
+docker compose -f docker-compose.dev.yml -f docker-compose.observability.yml up --build
+```
+
 ## Architecture
 
 - `src/controllers/` — thin request/response adapters; no business logic.

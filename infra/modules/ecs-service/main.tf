@@ -69,9 +69,52 @@ resource "aws_iam_role" "task" {
   permissions_boundary = var.permissions_boundary_arn
 }
 
+# The log router runs with the task role: it writes the app's logs to
+# CloudWatch itself (instead of the awslogs driver) and reads its extra config.
+data "aws_iam_policy_document" "log_router" {
+  count = var.log_router == null ? 0 : 1
+
+  statement {
+    sid       = "WriteAppLogs"
+    actions   = ["logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams"]
+    resources = ["${aws_cloudwatch_log_group.this.arn}:*"]
+  }
+
+  statement {
+    sid       = "ReadLogRouterConfig"
+    actions   = ["s3:GetObject"]
+    resources = [var.log_router.config_object_arn]
+  }
+
+  statement {
+    sid       = "LocateConfigBucket"
+    actions   = ["s3:GetBucketLocation"]
+    resources = [var.log_router.config_bucket_arn]
+  }
+}
+
+resource "aws_iam_role_policy" "log_router" {
+  count = var.log_router == null ? 0 : 1
+
+  name   = "log-router"
+  role   = aws_iam_role.task.id
+  policy = data.aws_iam_policy_document.log_router[0].json
+}
+
 # ---------------------------------------------------------------------------
 # Task definition
 # ---------------------------------------------------------------------------
+
+locals {
+  awslogs = {
+    logDriver = "awslogs"
+    options = {
+      awslogs-group         = aws_cloudwatch_log_group.this.name
+      awslogs-region        = data.aws_region.current.region
+      awslogs-stream-prefix = "app"
+    }
+  }
+}
 
 resource "aws_ecs_task_definition" "this" {
   # checkov:skip=CKV_AWS_336:Follow-up: read-only rootfs needs writable volumes for /tmp and .next/cache; verify their ownership on Fargate for the non-root user first.
@@ -88,7 +131,7 @@ resource "aws_ecs_task_definition" "this" {
     cpu_architecture        = "X86_64"
   }
 
-  container_definitions = jsonencode([
+  container_definitions = jsonencode(concat([
     {
       name      = "app"
       image     = var.image
@@ -103,16 +146,52 @@ resource "aws_ecs_task_definition" "this" {
       linuxParameters        = { initProcessEnabled = true }
       stopTimeout            = 30
 
+      logConfiguration = var.log_router == null ? local.awslogs : {
+        # Same log group as with awslogs, and the raw line (log_key), so
+        # CloudWatch looks exactly as before; the extra config adds Loki.
+        logDriver = "awsfirelens"
+        options = {
+          Name              = "cloudwatch_logs"
+          region            = data.aws_region.current.region
+          log_group_name    = aws_cloudwatch_log_group.this.name
+          log_stream_prefix = "app/"
+          auto_create_group = "false"
+          log_key           = "log"
+          retry_limit       = "2"
+        }
+      }
+    }
+    ], var.log_router == null ? [] : [
+    {
+      name      = "log-router"
+      image     = var.log_router_image
+      essential = true
+      # Shares the task's memory; Fluent Bit needs little.
+      memoryReservation = 50
+
+      firelensConfiguration = {
+        type = "fluentbit"
+        # Only the app's own line; the Loki output drops what's left.
+        options = { enable-ecs-log-metadata = "false" }
+      }
+
+      environment = [
+        { name = "aws_fluent_bit_init_s3_1", value = var.log_router.config_object_arn },
+        # Not read by anything; changing it makes a new revision when the file changes.
+        { name = "CONFIG_HASH", value = var.log_router.config_hash },
+      ]
+
+      # The router's own logs can't go through itself.
       logConfiguration = {
         logDriver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.this.name
           awslogs-region        = data.aws_region.current.region
-          awslogs-stream-prefix = "app"
+          awslogs-stream-prefix = "log-router"
         }
       }
     }
-  ])
+  ]))
 }
 
 # ---------------------------------------------------------------------------
@@ -165,6 +244,13 @@ resource "aws_ecs_service" "this" {
     subnets          = var.subnet_ids
     security_groups  = [aws_security_group.task.id]
     assign_public_ip = true
+  }
+
+  dynamic "service_registries" {
+    for_each = var.service_registry_arn == null ? [] : [var.service_registry_arn]
+    content {
+      registry_arn = service_registries.value
+    }
   }
 
   load_balancer {

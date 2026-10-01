@@ -558,6 +558,9 @@ curl -s -X POST <staging-url>/api/auth/bootstrap-admin \
   -d '{"email":"you@example.com","password":"a-strong-password","name":"Your Name"}' | jq
 ```
 
+- [ ] (Optional) Open staging's Grafana and watch your clicks show up. See
+      [Monitoring](#monitoring-grafana-prometheus-loki) near the end.
+
 ---
 
 # Stage F: Production (about 1 hour)
@@ -698,6 +701,71 @@ aws logs tail /ecs/job-platform-prod-api --since 5m | grep demo_seeded
 The same goes for **deploy-web**. **To undo a release,** deploy the previous version (e.g. `api-v1`) to
 production. More in `docs/releasing.md`.
 
+# Monitoring: Grafana, Prometheus, Loki
+
+Staging has its own Grafana with the API's metrics (Prometheus) and logs (Loki). It was created
+together with staging in step 14, and the API connected to it at its first deploy (step 18), so
+there's nothing to switch on. It has no public address: you open it through a private tunnel. Alert
+emails still come from step 15; this is for looking, not for paging. Background:
+`docs/observability.md`.
+
+### One time: install the Session Manager plugin
+
+The tunnel uses AWS Session Manager. 💻 **Terminal** (any folder):
+
+```bash
+curl -sSLo /tmp/session-manager-plugin.deb \
+  "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+sudo dpkg -i /tmp/session-manager-plugin.deb
+session-manager-plugin --version
+```
+
+### Open Grafana
+
+The tunnel opens Grafana on the **EC2 machine**, so your laptop's browser needs a second hop to reach it.
+
+1. 💻 **Terminal** (a ready terminal): get the password, then start the tunnel and leave it running:
+
+   ```bash
+   bash scripts/grafana-tunnel.sh --password
+   bash scripts/grafana-tunnel.sh
+   ```
+
+   ✅ It prints `Grafana for staging: http://localhost:3001` and then
+   `Waiting for connections...`.
+
+2. On your **laptop**, forward the same port from the EC2 machine. Pick one:
+   - **VS Code Remote-SSH** (from step 0): it usually offers to forward port 3001 by itself. If not,
+     open the **Ports** tab → **Forward a Port** → `3001`.
+   - **or a laptop terminal:** `ssh -N -L 3001:localhost:3001 ubuntu@<your-ec2-address>` (leave it
+     running).
+
+3. 🌐 On your laptop, open **http://localhost:3001** and log in as `admin` with the password from 1.
+
+✅ **You should see** the **Smart JobHub API** dashboard. **API** is **UP**, and **MongoDB** and **Redis**
+are **UP**. Click around `<staging-url>` for a minute: the request graphs move and your requests
+appear in **API logs** at the bottom. To find one request, paste its `requestId` from a log line
+into **Log search** at the top.
+
+**Ctrl+C** in both terminals closes the tunnel. For Prometheus itself, use
+`bash scripts/grafana-tunnel.sh staging prometheus` and port `9091` instead of `3001`.
+
+### Turn it on for production (optional, costs money)
+
+Production doesn't have it yet, because it adds about **$30/month** and the budget alert (step 8) is set to
+$110 for everything. When you want it:
+
+1. 📝 `infra/envs/prod/main.tf`: change `observability_enabled = false` to `true`.
+2. 💻 Save it with a pull request (the same commands as in step 19), then approve `apply-prod` in
+   GitHub Actions.
+3. 🌐 GitHub → Actions → **deploy-api** → environment `production`, **Version** = the version that's
+   live now (e.g. `api-v1`) → approve. This connects the API to it, and changes nothing else.
+4. 💻 Open it the same way, with `prod`: `bash scripts/grafana-tunnel.sh prod --password` and
+   `bash scripts/grafana-tunnel.sh prod`.
+
+> To run the same Grafana on your own computer instead, see "Local stack" in `docs/observability.md`
+> (needs Docker, no AWS).
+
 # Stop paying
 
 To delete **everything** this project created in AWS, run 💻 in a ready terminal:
@@ -753,6 +821,10 @@ When you buy one (it's only $3–15 a year):
 | No live SSLCommerz store yet                              | 📝 In `infra/envs/prod/main.tf`, set `sslcommerz_sandbox = true`, save it with a pull request, and use your sandbox details in step 25. |
 | Password-reset emails don't arrive                        | Without a domain they only go to your own Resend address (step 12). Add a domain to fix it.                                             |
 | No alarm emails                                           | Step 15 / 23: confirm the subscription email.                                                                                           |
+| `session-manager-plugin is not installed`                 | Do "One time: install the Session Manager plugin" under Monitoring.                                                                     |
+| Tunnel: `no running Grafana task`                         | Wait 5 minutes after `apply-staging` / `apply-prod`. If it persists, see Troubleshooting in `docs/observability.md`.                    |
+| `localhost:3001` doesn't open on your laptop              | The tunnel runs on the EC2 machine: keep it running, and forward port 3001 from your laptop (Monitoring, step 2).                       |
+| Grafana shows the API as DOWN, or no API logs             | The API connects at its next deploy: re-run **deploy-api** with the version that's live now.                                            |
 | Anything else                                             | `docs/runbook.md` → "Where to look"                                                                                                     |
 
 ---

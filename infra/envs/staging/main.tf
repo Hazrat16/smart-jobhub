@@ -15,6 +15,9 @@ module "env" {
   sslcommerz_sandbox  = true
   deletion_protection = false
   log_retention_days  = 14
+
+  # Prometheus, Loki and Grafana (docs/observability.md). About $10-12/month on Spot.
+  observability_enabled = true
 }
 
 # The stack used to be written inline here; these keep an already-applied

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -27,11 +28,18 @@ import {
 import mongoose from "mongoose";
 import { logError, logInfo } from "./utils/logger.js";
 import { HttpError } from "./utils/http.js";
-import { snapshotMetrics, trackHttp } from "./utils/metrics.js";
+import { registry, trackHttp } from "./utils/metrics.js";
 import { pingRedis } from "./config/redis.js";
 logInfo("app.ts loaded");
 
 const allowedOrigins = getAllowedOrigins();
+const METRICS_PATH = "/metrics";
+
+function bearerMatches(header: string | undefined, token: string): boolean {
+  const given = Buffer.from(header ?? "");
+  const expected = Buffer.from(`Bearer ${token}`);
+  return given.length === expected.length && timingSafeEqual(given, expected);
+}
 
 const app = express();
 // Number of reverse proxies in front of the app (1 behind the AWS ALB). Without it,
@@ -77,6 +85,11 @@ export function stopBackgroundJobs(): void {
 }
 
 app.use((req, res, next) => {
+  // Prometheus scrapes every 15 s; recording those would only drown the real traffic.
+  if (req.path === METRICS_PATH) {
+    next();
+    return;
+  }
   const startedAt = Date.now();
   const originalEnd = res.end.bind(res);
   res.end = ((...args: Parameters<typeof res.end>) => {
@@ -89,7 +102,12 @@ app.use((req, res, next) => {
   }) as typeof res.end;
   res.on("finish", () => {
     const latencyMs = Date.now() - startedAt;
-    trackHttp(res.statusCode, latencyMs);
+    // Route template, e.g. /api/jobs/:id. Unmatched paths (404s, scanners) share
+    // one label so they can't create a time series per URL.
+    const route = req.route
+      ? `${(res.locals["mountPath"] as string | undefined) ?? ""}${String(req.route.path)}`
+      : "unmatched";
+    trackHttp(req.method, route, res.statusCode, latencyMs);
     logInfo("http_request", {
       requestId: res.locals["requestId"] as string | undefined,
       method: req.method,
@@ -102,22 +120,32 @@ app.use((req, res, next) => {
   next();
 });
 
+/**
+ * Remembers the router's mount path for the metrics route label. req.baseUrl
+ * can't be read at "finish": Express resets it once a handler passes an error
+ * on to the error handler, which would turn /api/jobs/:id into just /:id.
+ */
+function recordMountPath(req: express.Request, res: express.Response, next: express.NextFunction) {
+  res.locals["mountPath"] = req.baseUrl;
+  next();
+}
+
 app.use(express.json());
 app.use(sanitizeInput);
-app.use("/api/auth", authRoutes);
-app.use("/api/profile", profileRoutes);
-app.use("/api/upload", uploadRoute);
-app.use("/api/chat", chatRoutes);
-app.use("/api/jobs", jobRoutes);
-app.use("/api/companies", companyRoutes);
-app.use("/api/applications", applicationRoutes);
-app.use("/api/saved-jobs", savedJobRoutes);
-app.use("/api/notifications", notificationRoutes);
-app.use("/api/payments", paymentRoutes);
-app.use("/api/resume-fit", resumeFitRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/external-jobs", externalJobRoutes);
-app.use("/api/remote-jobs", remoteJobRoutes);
+app.use("/api/auth", recordMountPath, authRoutes);
+app.use("/api/profile", recordMountPath, profileRoutes);
+app.use("/api/upload", recordMountPath, uploadRoute);
+app.use("/api/chat", recordMountPath, chatRoutes);
+app.use("/api/jobs", recordMountPath, jobRoutes);
+app.use("/api/companies", recordMountPath, companyRoutes);
+app.use("/api/applications", recordMountPath, applicationRoutes);
+app.use("/api/saved-jobs", recordMountPath, savedJobRoutes);
+app.use("/api/notifications", recordMountPath, notificationRoutes);
+app.use("/api/payments", recordMountPath, paymentRoutes);
+app.use("/api/resume-fit", recordMountPath, resumeFitRoutes);
+app.use("/api/admin", recordMountPath, adminRoutes);
+app.use("/api/external-jobs", recordMountPath, externalJobRoutes);
+app.use("/api/remote-jobs", recordMountPath, remoteJobRoutes);
 
 app.get("/api/test", (req, res) => {
   res.json({
@@ -168,22 +196,24 @@ app.get("/api/health/ready", async (_req, res) => {
   });
 });
 
-app.get("/api/metrics", (_req, res) => {
+// Prometheus endpoint. Deliberately outside /api: the ALB only forwards /api/* and
+// /socket.io/* to this service, so it is reachable inside the network only.
+// METRICS_TOKEN, when set, additionally requires `Authorization: Bearer <token>`.
+app.get(METRICS_PATH, async (req, res) => {
+  const token = process.env["METRICS_TOKEN"];
+  if (token && !bearerMatches(req.header("authorization"), token)) {
+    res.status(401).json({ success: false, message: "Unauthorized" });
+    return;
+  }
   try {
-    return res.json({
-      success: true,
-      message: "Metrics snapshot",
-      data: snapshotMetrics(),
-      timestamp: new Date().toISOString(),
-    });
+    res.set("Content-Type", registry.contentType);
+    res.send(await registry.metrics());
   } catch (error) {
-    logError("metrics_snapshot_failed", { error });
-    return res.status(500).json({
-      success: false,
-      message: "Could not collect metrics",
-    });
+    logError("metrics_collect_failed", { error });
+    res.status(500).json({ success: false, message: "Could not collect metrics" });
   }
 });
+
 app.use(notFoundHandler);
 app.use(errorHandler);
 

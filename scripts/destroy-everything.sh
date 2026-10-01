@@ -73,7 +73,7 @@ This PERMANENTLY deletes, in account $ACCOUNT:
   - production and staging (ECS, load balancers, CloudFront, Valkey, VPCs, alarms, ...)
   - the bootstrap: Terraform state bucket (all state history), ECR repos (all images),
     CI roles, the GitHub OIDC provider, the budget
-  - the secrets /${PROJECT}/{staging,prod}/{api,redis}
+  - the secrets /${PROJECT}/{staging,prod}/{api,redis,grafana}
 It does NOT touch MongoDB Atlas (delete those clusters by hand; steps at the end).
 EOF
 if $DRY_RUN; then
@@ -207,7 +207,7 @@ fi
 
 bold "5/5 Deleting secrets now (skipping the 7-day recovery window)"
 for env in staging prod; do
-  for name in api redis; do
+  for name in api redis grafana; do
     id="/${PROJECT}/${env}/${name}"
     if aws secretsmanager describe-secret --secret-id "$id" >/dev/null 2>&1; then
       if run aws secretsmanager delete-secret --secret-id "$id" --force-delete-without-recovery >/dev/null; then

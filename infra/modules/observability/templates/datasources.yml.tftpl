@@ -1,0 +1,21 @@
+# Rendered by Terraform (modules/observability). Same uids as the local stack,
+# so the dashboards in apps/api/observability work unchanged.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus.${namespace}:9090
+    isDefault: true
+    jsonData:
+      timeInterval: 15s
+
+  - name: Loki
+    uid: loki
+    type: loki
+    access: proxy
+    url: http://loki.${namespace}:3100
+    jsonData:
+      maxLines: 1000
