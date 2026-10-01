@@ -104,7 +104,7 @@ export default function RegisterPage() {
       if (hasSession && auth) {
         setAuthToken(auth.token);
         setUser(auth.user);
-        toast.success("Registration successful! Welcome to JobPlatform.");
+        toast.success("Registration successful! Welcome to Smart JobHub.");
         if (auth.user.role === "employer") {
           router.push("/my-jobs");
         } else {

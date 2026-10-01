@@ -150,20 +150,117 @@ api tasks ── GET /metrics ────────────────�
   reach the api's port 5000. Loki only accepts the api, Grafana and Prometheus. Grafana is reached
   through an SSM port forward into its task.
 
-### Open Grafana
+### Open Grafana, Prometheus and Loki
 
-Needs the AWS CLI v2 and the
-[Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html).
+None of them has a public address. You reach them in two hops:
+
+1. An **SSM tunnel** from your work machine (the EC2 machine in `setup.md`) into the Grafana task.
+   It opens the port on the work machine's `localhost`.
+2. An **SSH port forward** from your laptop to the work machine, so your laptop's browser can use it.
+
+| Tool       | Tunnel command (on the work machine)                | Laptop URL            |
+| ---------- | --------------------------------------------------- | --------------------- |
+| Grafana    | `bash scripts/grafana-tunnel.sh`                    | http://localhost:3001 |
+| Prometheus | `bash scripts/grafana-tunnel.sh staging prometheus` | http://localhost:9091 |
+| Loki       | No UI of its own: use Grafana → **Explore**         | (through Grafana)     |
+
+For prod, replace `staging` with `prod` (Grafana: `bash scripts/grafana-tunnel.sh prod`).
+
+**One time, on the work machine:** install the AWS CLI v2 (setup.md step 2) and the
+[Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html):
 
 ```bash
-bash scripts/grafana-tunnel.sh --password          # admin password (generated, in Secrets Manager)
-bash scripts/grafana-tunnel.sh                     # staging Grafana on http://localhost:3001
-bash scripts/grafana-tunnel.sh staging prometheus  # staging Prometheus on http://localhost:9091
+curl -sSLo /tmp/session-manager-plugin.deb \
+  "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_64bit/session-manager-plugin.deb"
+sudo dpkg -i /tmp/session-manager-plugin.deb
 ```
 
-Log in as `admin`. The tunnel stays open until Ctrl+C. Grafana keeps no state of its own: data
-sources and dashboards are re-created from config on every start, and edits made in the UI are lost.
-Change the JSON in the repo instead (see [Dashboard](#dashboard)).
+#### Grafana
+
+**Terminal 1, on the work machine.** Leave it running; Ctrl+C closes the tunnel.
+
+```bash
+cd ~/smart-jobhub
+export AWS_PROFILE=smartjobhub-admin AWS_REGION=ap-south-1
+bash scripts/grafana-tunnel.sh --password   # admin password (generated, in Secrets Manager)
+bash scripts/grafana-tunnel.sh              # prints "Waiting for connections..."
+```
+
+**Terminal 2, on your laptop** (not inside an SSH session). This is the SSH command you normally use
+to reach the work machine, with `-N -L` added. It prints nothing while it works.
+
+```bash
+ssh -i <your-key.pem> -N -L 3001:localhost:3001 ubuntu@<your-ec2-address>
+```
+
+With VS Code Remote-SSH you can skip terminal 2: **Ports** tab → **Forward a Port** → `3001`.
+
+Open **http://localhost:3001** on your laptop and log in as `admin`. Grafana keeps no state of its
+own: data sources and dashboards are re-created from config on every start, and edits made in the UI
+are lost. Change the JSON in the repo instead (see [Dashboard](#dashboard)).
+
+#### Prometheus
+
+**Terminal 1, on the work machine** (leave it running):
+
+```bash
+cd ~/smart-jobhub
+export AWS_PROFILE=smartjobhub-admin AWS_REGION=ap-south-1
+bash scripts/grafana-tunnel.sh staging prometheus
+```
+
+**Terminal 2, on your laptop:**
+
+```bash
+ssh -i <your-key.pem> -N -L 9091:localhost:9091 ubuntu@<your-ec2-address>
+```
+
+Open **http://localhost:9091**:
+
+- **Status → Targets:** `api`, `loki` and `prometheus` are all **UP**.
+- **Alerts:** the rules from `alerts.yml` and their state.
+- **Query:** e.g. `http_requests_total` or `app_dependency_up`.
+
+To run both at once, start each tunnel in its own terminal on the work machine, and forward both
+ports with one laptop command:
+
+```bash
+ssh -i <your-key.pem> -N -L 3001:localhost:3001 -L 9091:localhost:9091 ubuntu@<your-ec2-address>
+```
+
+Prometheus is also a data source in Grafana (**Explore** → **Prometheus**), so the Grafana tunnel
+alone covers most checks.
+
+#### Loki
+
+Loki only has an API, so you read it through Grafana. Open Grafana as above, then **Explore** (the
+compass icon) → data source **Loki** → **Code** mode, and run a query:
+
+```logql
+# All api logs
+{service="job-platform-api"}
+
+# Errors only
+{service="job-platform-api"} | json | level="error"
+
+# Everything one request logged
+{service="job-platform-api"} | json | requestId="<id>"
+
+# Requests slower than 500 ms
+{service="job-platform-api"} | json | message="http_request" and latencyMs > 500
+```
+
+The **API logs** panel at the bottom of the Smart JobHub API dashboard shows the same data.
+
+#### If it doesn't connect
+
+| You see                                               | Cause and fix                                                                                       |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `No such file or directory` for the script            | You're not in the project folder: `cd ~/smart-jobhub`, then `git pull`.                             |
+| `session-manager-plugin is not installed`             | Install it (the one-time step above).                                                               |
+| `Permission denied (publickey)` from `ssh -L`         | You ran it on the work machine. Run it on your laptop, with the key you use to reach the machine.   |
+| The laptop URL doesn't load                           | Terminal 1's tunnel was stopped (Ctrl+C), or terminal 2 isn't running. Both must stay open.         |
+| `no running Grafana task`                             | See [Troubleshooting](#troubleshooting).                                                            |
 
 ### Turn it on for prod
 

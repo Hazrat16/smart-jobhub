@@ -248,7 +248,7 @@ export default function ResumeFitPage() {
             <code className="rounded bg-card/80 px-1 py-0.5 text-xs">
               OPENAI_BASE_URL=https://api.groq.com/openai/v1
             </code>{" "}
-            in <code className="rounded bg-card/80 px-1 text-xs">job-platform/.env</code>, then
+            in <code className="rounded bg-card/80 px-1 text-xs">apps/api/.env</code>, then
             restart the API. OpenRouter and other OpenAI-compatible hosts also work—see{" "}
             <code className="rounded bg-card/80 px-1 text-xs">.env.example</code>.
           </p>

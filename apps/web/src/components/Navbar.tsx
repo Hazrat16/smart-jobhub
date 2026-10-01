@@ -1,6 +1,7 @@
 "use client";
 
-import { Briefcase, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
 import { trackActivity } from "@/lib/analytics";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -33,14 +34,13 @@ export default function Navbar() {
             href="/"
             className="group flex shrink-0 items-center gap-2.5 rounded-xl py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-accent via-accent-end to-hold text-white shadow-lg shadow-accent/30 ring-2 ring-card transition-transform duration-300 group-hover:scale-[1.03] dark:shadow-black/40">
-              <Briefcase className="h-5 w-5" aria-hidden />
-            </span>
-            <span className="text-lg font-extrabold tracking-tight sm:text-xl">
-              <span className="text-foreground">Job</span>
-              <span className="bg-gradient-to-r from-accent via-accent-end to-hold bg-clip-text text-transparent dark:from-accent-end dark:via-accent dark:to-hold">
-                Platform
-              </span>
+            {/* Phones: only the icon tile (the image's left square, clipped), so the
+                search box keeps its room. From sm up: the whole wordmark. */}
+            <span className="block w-14 overflow-hidden sm:w-auto">
+              <BrandLogo
+                className="h-14 w-auto max-w-none transition-transform duration-300 group-hover:scale-[1.02]"
+                priority
+              />
             </span>
           </Link>
 

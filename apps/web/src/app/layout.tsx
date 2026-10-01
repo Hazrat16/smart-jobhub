@@ -15,14 +15,14 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "JobPlatform - Find Your Dream Job or Hire the Best Talent",
+  title: "Smart JobHub - Find Your Dream Job or Hire the Best Talent",
   description:
-    "Connect with opportunities that match your skills and aspirations. Whether you're looking for your next career move or building your dream team, JobPlatform makes it simple and effective.",
+    "Connect with opportunities that match your skills and aspirations. Whether you're looking for your next career move or building your dream team, Smart JobHub makes it simple and effective.",
   keywords:
     "jobs, careers, employment, hiring, recruitment, job search, job posting",
-  authors: [{ name: "JobPlatform Team" }],
+  authors: [{ name: "Smart JobHub Team" }],
   openGraph: {
-    title: "JobPlatform - Find Your Dream Job or Hire the Best Talent",
+    title: "Smart JobHub - Find Your Dream Job or Hire the Best Talent",
     description:
       "Connect with opportunities that match your skills and aspirations.",
     type: "website",

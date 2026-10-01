@@ -1,5 +1,6 @@
 "use client";
 
+import BrandLogo from "@/components/BrandLogo";
 import { getUser } from "@/utils/api";
 import {
   ArrowRight,
@@ -231,12 +232,8 @@ export default function HomePage() {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 gap-10 md:grid-cols-4">
             <div>
-              <div className="mb-4 flex items-center gap-2">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-cyan-400 text-white shadow-lg">
-                  <Briefcase className="h-5 w-5" aria-hidden />
-                </span>
-                <span className="text-xl font-extrabold tracking-tight">JobPlatform</span>
-              </div>
+              {/* The footer is navy in both themes, so it always uses the dark logo. */}
+              <BrandLogo variant="dark" className="mb-4 h-14 w-auto" />
               <p className="text-sm leading-relaxed text-footer-muted">
                 Connecting talented professionals with amazing opportunities worldwide.
               </p>
@@ -313,7 +310,7 @@ export default function HomePage() {
           </div>
 
           <div className="mt-12 border-t border-footer-border pt-8 text-center text-sm text-footer-muted">
-            <p>&copy; 2026 JobPlatform. All rights reserved.</p>
+            <p>&copy; 2026 Smart JobHub. All rights reserved.</p>
           </div>
         </div>
       </footer>

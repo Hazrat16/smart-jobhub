@@ -1,6 +1,6 @@
-# JobPlatform Frontend
+# Smart JobHub Frontend
 
-A modern, responsive job platform frontend built with Next.js 15, React 19, and Tailwind CSS. This application provides a comprehensive job search and posting experience for both job seekers and employers.
+A modern, responsive job platform frontend for Smart JobHub, built with Next.js 15, React 19, and Tailwind CSS. This application provides a comprehensive job search and posting experience for both job seekers and employers.
 
 ## 🚀 Features
 
@@ -70,7 +70,7 @@ src/
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
-   cd job-platform-frontend
+   cd apps/web
    ```
 
 2. **Install dependencies**
@@ -101,7 +101,7 @@ src/
 
 ## 🌐 API Integration
 
-The frontend is designed to work with the JobPlatform backend API. Key endpoints include:
+The frontend is designed to work with the Smart JobHub backend API (`apps/api`). Key endpoints include:
 
 ### Authentication
 - `POST /auth/register` - User registration
@@ -221,4 +221,4 @@ For support and questions:
 
 ---
 
-Built with ❤️ by the JobPlatform Team
+Built with ❤️ by the Smart JobHub Team

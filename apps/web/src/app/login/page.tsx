@@ -244,7 +244,7 @@ function LoginPageContent() {
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="bg-card/90 px-2 text-fg-subtle backdrop-blur-sm">
-                  New to JobPlatform?
+                  New to Smart JobHub?
                 </span>
               </div>
             </div>
