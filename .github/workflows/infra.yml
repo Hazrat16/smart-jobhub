@@ -40,6 +40,8 @@ jobs:
             infra:
               - 'infra/**'
               - '.github/workflows/infra.yml'
+              # Uploaded by modules/observability (dashboards, alert rules).
+              - 'apps/api/observability/**'
 
   # Static checks and mocked-provider tests; no AWS access.
   static:

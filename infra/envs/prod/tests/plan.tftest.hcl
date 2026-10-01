@@ -159,6 +159,11 @@ run "prod_plan" {
     condition     = output.settings.demo_reset_schedule == "cron(0 3 * * ? *)"
     error_message = "Prod hosts the public demo, reset nightly."
   }
+
+  assert {
+    condition     = output.observability == null
+    error_message = "Prod doesn't run the observability stack until it's turned on."
+  }
 }
 
 run "no_domain_cloudfront" {

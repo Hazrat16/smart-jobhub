@@ -119,3 +119,29 @@ variable "iam_path" {
   type        = string
   default     = "/job-platform/"
 }
+
+variable "service_registry_arn" {
+  description = "Optional Cloud Map service the tasks register in (A records), e.g. so Prometheus can find every task."
+  type        = string
+  default     = null
+}
+
+variable "log_router" {
+  description = <<-EOT
+    Optional FireLens log router (Fluent Bit sidecar). App logs still go to this
+    service's CloudWatch log group, unchanged; the extra Fluent Bit config in S3
+    adds more outputs (Loki). config_hash makes a new revision when that file changes.
+  EOT
+  type = object({
+    config_bucket_arn = string
+    config_object_arn = string
+    config_hash       = string
+  })
+  default = null
+}
+
+variable "log_router_image" {
+  description = "AWS for Fluent Bit image; the init- variant loads extra config files from S3 on Fargate."
+  type        = string
+  default     = "public.ecr.aws/aws-observability/aws-for-fluent-bit:init-3.1.0"
+}

@@ -1,0 +1,68 @@
+// Grafana Alloy: tails the Docker logs of containers labelled
+// smartjobhub.logs=true (set in docker-compose.observability.yml) and ships them
+// to Loki. Other containers on the machine are ignored.
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+
+  filter {
+    name   = "label"
+    values = ["smartjobhub.logs=true"]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  labels        = { env = "local" }
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.process.api.receiver]
+}
+
+// The API writes one JSON object per line (src/utils/logger.ts). `level` becomes
+// an indexed label (few values, so cheap). requestId and path become structured
+// metadata, which is searchable without creating a stream per value. Lines that
+// are not JSON (startup banners, other containers) pass through unchanged.
+loki.process "api" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.json {
+    expressions = {
+      level      = "level",
+      request_id = "requestId",
+      path       = "path",
+    }
+  }
+
+  stage.labels {
+    values = { level = "" }
+  }
+
+  stage.structured_metadata {
+    values = {
+      request_id = "",
+      path       = "",
+    }
+  }
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

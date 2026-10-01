@@ -1,0 +1,15 @@
+# Rendered by Terraform (modules/observability), loaded by the api task's
+# FireLens log router. FireLens generates the CloudWatch output from the task
+# definition; this adds a second output to Loki. Removing the FireLens fields
+# leaves only "log", which drop_single_key sends as the raw JSON line, so Loki
+# sees exactly what the app printed (and detects `level` from it).
+[OUTPUT]
+    Name             loki
+    Match            app-firelens*
+    Host             loki.${namespace}
+    Port             3100
+    Labels           service=job-platform-api, env=${environment}
+    Remove_keys      source, container_id, container_name, ecs_cluster, ecs_task_arn, ecs_task_definition
+    Drop_single_key  raw
+    Line_format      json
+    Retry_Limit      3

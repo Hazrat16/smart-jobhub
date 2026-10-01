@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: smart-jobhub
+    folder: Smart JobHub
+    type: file
+    # Dashboards come from apps/api/observability/grafana/dashboards in the repo.
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/config/dashboards

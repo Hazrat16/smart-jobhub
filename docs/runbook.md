@@ -28,6 +28,11 @@ curl -s https://<domain>/api/health/ready | jq '{status, version, services}'
 Errors with stack traces are in Sentry, filtered by environment (`staging` / `production`) and release
 (`api-v12`).
 
+Where `observability_enabled` is on (staging), the same api logs are also in Loki, and metrics are in
+Prometheus. Open them in Grafana with `bash scripts/grafana-tunnel.sh <env>` (see
+[observability.md](observability.md#on-aws)). Paste a `requestId` into the dashboard's log search to
+see everything one request logged.
+
 ## Alerts
 
 Alerts arrive by email from the `job-platform-<env>-alerts` SNS topic, once when they fire (ALARM) and
@@ -71,6 +76,9 @@ A service expected to run has **zero** healthy tasks. The app, or half of it, is
      Promote a real version.
    - Exit code 1 at startup: see logs. Missing `JWT_SECRET`, Atlas unreachable, etc.
    - Health check failing: `/api/health/ready` returns 503 when MongoDB isn't connected.
+   - `log-router` exited (observability on): the api task's Fluent Bit sidecar is essential, so the
+     task stops with it. Its own logs are in the api log group under the `log-router/` stream prefix.
+     A bad Fluent Bit config in S3 is the usual cause; `terraform apply` re-uploads it from the repo.
 2. Right after a deploy → [roll back](#roll-back).
 
 ### CPU or memory high

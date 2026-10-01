@@ -286,6 +286,33 @@ README.md                 live demo, badges, diagram, "production readiness" sec
   later switches the environment back to ACM + Route 53 (setup.md, "Later: add a domain").
   Trade-offs: the CloudFront → ALB hop is HTTP, and Resend can only email the account owner.
 
+### Observability (Prometheus, Loki, Grafana)
+
+- **Local:** `apps/api/docker-compose.observability.yml` layers Prometheus, Loki, Grafana Alloy, Grafana and
+  the Redis and MongoDB exporters onto the dev stack. Details are in `docs/observability.md`.
+- **API:** the JSON `/api/metrics` snapshot was replaced by Prometheus metrics at `GET /metrics`
+  (prom-client). That endpoint is outside `/api`, so the ALB never routes it, and `METRICS_TOKEN`
+  optionally requires a bearer token. Metrics: RED by route template, dependency reachability, the
+  BullMQ email queue by state, Socket.IO clients, and Node.js process metrics.
+- **AWS:** `modules/observability`, toggled by `observability_enabled`. It's on in staging and off in
+  prod (about $30/month on-demand, so it waits for the budget). The pieces:
+  - Prometheus, Loki and Grafana as Fargate services (`modules/internal-service`). Prometheus keeps
+    data on EFS, and Loki stores in S3.
+  - The services find each other through a private Cloud Map namespace (`job-platform-<env>.internal`).
+  - The api gets a FireLens (Fluent Bit) sidecar. Its logs still go to the same CloudWatch group, plus Loki.
+  - The api also registers in Cloud Map, so Prometheus scrapes every task.
+  - Configs are rendered by Terraform into S3 and copied in by an init container. Dashboards and
+    alert rules are the same files the local stack uses.
+- **Access to Grafana:** no public endpoint. You reach it through an SSM port forward
+  (`scripts/grafana-tunnel.sh`). The admin password is generated into `/job-platform/<env>/grafana`.
+- **Decisions:**
+  - Fargate over one EC2 host: nothing to patch, and the same pattern as the apps.
+  - Over AMP/AMG: Managed Grafana needs IAM Identity Center, and AMP bills per sample.
+  - Paging stays with CloudWatch alarms → SNS, so there's no Alertmanager.
+- **Follow-ups:**
+  - An alarm on the observability services' running task count.
+  - Sentry/RUM for the web app is still open (Phase 8).
+
 ## Rollout checklist
 
 1. [ ] **CI hygiene:** root workflows with path filters, fixes above, branch protection on `main`.
@@ -307,6 +334,9 @@ README.md                 live demo, badges, diagram, "production readiness" sec
        (Code and docs done; waiting on apply, alert email confirmation, and the first restore drill.)
 9. [ ] **CV polish:** README diagram, badges, live demo and demo login, ADRs.
        (Done in the repo; waiting on the live URL and demo password in README.md, and archiving the old repos.)
+10. [ ] **Observability:** Prometheus, Loki, Grafana locally and on AWS (staging), `/metrics` in the API.
+       (Code done; the local stack was run end to end and the AWS module is tested with mocks. Waiting on
+       the staging apply and the next api deploy.)
 
 ## Prerequisites the owner must provide
 

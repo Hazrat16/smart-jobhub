@@ -27,3 +27,8 @@ output "settings" {
   description = "Capacity, scaling and protection settings of this environment."
   value       = module.env.settings
 }
+
+output "observability" {
+  description = "Prometheus/Loki/Grafana stack (null when off). Open Grafana with scripts/grafana-tunnel.sh."
+  value       = module.env.observability
+}

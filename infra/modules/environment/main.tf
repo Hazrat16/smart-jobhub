@@ -108,6 +108,10 @@ module "api" {
   log_retention_days       = var.log_retention_days
   permissions_boundary_arn = local.workload_boundary_arn
 
+  # Prometheus finds every api task through Cloud Map; FireLens copies its logs to Loki.
+  service_registry_arn = var.observability_enabled ? module.observability[0].api_service_registry_arn : null
+  log_router           = var.observability_enabled ? module.observability[0].api_log_router : null
+
   environment = merge({
     NODE_ENV = "production"
     PORT     = "5000"
@@ -181,4 +185,27 @@ module "monitoring" {
       expected_running        = var.web.min_count >= 1
     }
   }
+}
+
+module "observability" {
+  source = "../observability"
+  count  = var.observability_enabled ? 1 : 0
+
+  name                     = local.name
+  environment              = var.environment
+  vpc_id                   = module.network.vpc_id
+  subnet_ids               = module.network.public_subnet_ids
+  cluster_arn              = aws_ecs_cluster.this.arn
+  use_spot                 = var.use_spot
+  log_retention_days       = var.log_retention_days
+  permissions_boundary_arn = local.workload_boundary_arn
+
+  api_security_group_id = module.api.security_group_id
+  grafana_secret_name   = "/${var.project}/${var.environment}/grafana"
+
+  # The same files the local stack uses (apps/api/docker-compose.observability.yml).
+  alert_rules_file = "${path.module}/../../../apps/api/observability/prometheus/alerts.yml"
+  dashboards_dir   = "${path.module}/../../../apps/api/observability/grafana/dashboards"
+
+  depends_on = [aws_ecs_cluster_capacity_providers.this]
 }
