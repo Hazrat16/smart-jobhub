@@ -9,7 +9,7 @@ a laptop, with an admin's credentials. After that, CI does all Terraform work th
 | OIDC provider | `token.actions.githubusercontent.com` | Lets GitHub Actions get short-lived AWS credentials. No static keys. |
 | ECR repos | `job-platform-api`, `job-platform-web` | IMMUTABLE tags, scan on push, untagged images expire after 7 days, last 200 versions kept. |
 | IAM policy | `/job-platform/job-platform-workload-boundary` | Permissions boundary that every role created by the env stacks must carry. |
-| IAM role | `/job-platform-ci/job-platform-infra-planner` | `terraform plan` on PRs, and the saved prod plan after merge. ReadOnlyAccess + state read + lock + write to `plans/` (checked by SHA-256 before apply) + read of the Terraform-generated `/job-platform/*/redis` secrets (already in state). |
+| IAM role | `/job-platform-ci/job-platform-infra-planner` | `terraform plan` on PRs, and the saved prod plan after merge. ReadOnlyAccess + state read + lock + write to `plans/` (checked by SHA-256 before apply) + read of the Terraform-generated `/job-platform/*/redis` and `/job-platform/*/grafana` secrets (already in state). |
 | IAM role | `/job-platform-ci/job-platform-infra-deployer` | `terraform apply` on `main`. PowerUserAccess + IAM limited to `/job-platform/` and the boundary. |
 | IAM role | `/job-platform-ci/job-platform-api-deployer` | `deploy-api.yml` on `main`, in the `staging` or `production` environment. Push/pull `job-platform-api`, update the api services, pass the api task roles. |
 | IAM role | `/job-platform-ci/job-platform-web-deployer` | The same for `deploy-web.yml` and the web services. |

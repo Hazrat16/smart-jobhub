@@ -91,12 +91,16 @@ data "aws_iam_policy_document" "planner_state" {
     resources = ["${aws_s3_bucket.tfstate.arn}/*"]
   }
 
-  # Refreshing Terraform-managed secret versions (the generated REDIS_URL) needs
-  # the value. That grants nothing new: the planner reads state, which holds it.
+  # Refreshing Terraform-managed secret versions (the generated REDIS_URL and
+  # Grafana admin password) needs the value. That grants nothing new: the
+  # planner reads state, which holds both. Hand-filled secrets (api) stay out.
   statement {
-    sid       = "RefreshManagedSecrets"
-    actions   = ["secretsmanager:GetSecretValue"]
-    resources = ["arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:/${var.project}/*/redis-*"]
+    sid     = "RefreshManagedSecrets"
+    actions = ["secretsmanager:GetSecretValue"]
+    resources = [
+      "arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:/${var.project}/*/redis-*",
+      "arn:aws:secretsmanager:${var.region}:${local.account_id}:secret:/${var.project}/*/grafana-*",
+    ]
   }
 
   # Saved prod plans: written after merge, applied after approval by
