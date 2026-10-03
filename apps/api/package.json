@@ -4,7 +4,7 @@
   "type": "module",
   "main": "src/server.ts",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec \"tsx src/startChatServer.ts\"",
+    "dev": "tsx watch src/startChatServer.ts",
     "start": "tsx src/startChatServer.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -43,7 +43,6 @@
     "@types/node": "^24.0.13",
     "@types/supertest": "^7.2.1",
     "eslint": "^9.32.0",
-    "nodemon": "^3.1.10",
     "socket.io-client": "^4.8.3",
     "supertest": "^7.3.0",
     "ts-node": "^10.9.2",
