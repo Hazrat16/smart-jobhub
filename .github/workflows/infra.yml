@@ -5,6 +5,9 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # Production infra: Actions → infra → Run workflow (from main). Only a run
+  # started this way plans prod and waits for approval, so nothing piles up.
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,6 +29,7 @@ jobs:
   # Path filtering happens here instead of in `on.paths`, so the required
   # `infra-ci` check always reports a result and never blocks unrelated PRs.
   changes:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
@@ -189,11 +193,12 @@ jobs:
       - name: terraform apply
         run: terraform apply -input=false -no-color -lock-timeout=5m staging.tfplan
 
-  # Prod: plan after staging applied cleanly, save the plan, and apply exactly
-  # that file after a reviewer approves the `production` environment.
+  # Prod (manual runs only): plan, save the plan, and apply exactly that file
+  # after a reviewer approves the `production` environment. Merges never touch
+  # prod, so an unanswered approval can't hold the terraform-prod lock and
+  # block later applies. Reject the approval to drop a run you don't want.
   plan-prod:
-    needs: [changes, apply-staging]
-    if: github.event_name == 'push' && needs.apply-staging.result == 'success'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -206,6 +211,13 @@ jobs:
       run:
         working-directory: infra/envs/prod
     steps:
+      # The AWS roles only trust main; fail with a clear message instead.
+      - name: Check the run is from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow from main (\"Use workflow from\")."
+          exit 1
+
       - uses: actions/checkout@v4
 
       - uses: hashicorp/setup-terraform@v3
