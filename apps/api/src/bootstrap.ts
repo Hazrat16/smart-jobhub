@@ -1,9 +1,12 @@
-import { createServer } from "http";
 import dns from "dns";
+import { createServer } from "http";
 import mongoose from "mongoose";
 import app, { stopBackgroundJobs } from "./app.js";
+import {
+  clearWebSocketService,
+  setWebSocketService,
+} from "./chat/websocketRegistry.js";
 import { WebSocketService } from "./chat/websocketService.js";
-import { clearWebSocketService, setWebSocketService } from "./chat/websocketRegistry.js";
 import { closeRedis, getRedis } from "./config/redis.js";
 import { captureException, flushSentry, initSentry } from "./config/sentry.js";
 import { closeEmailQueue } from "./queues/emailQueue.js";
@@ -28,7 +31,10 @@ function assertRequiredEnv(): void {
 
 function installProcessErrorHandlers(): void {
   process.on("uncaughtException", (err) => {
-    logError("uncaught_exception", { error: String(err), stack: (err as Error)?.stack });
+    logError("uncaught_exception", {
+      error: String(err),
+      stack: (err as Error)?.stack,
+    });
     captureException(err);
     flushSentry()
       .catch(() => undefined)
@@ -51,7 +57,7 @@ export const startServer = async () => {
   let wsService: WebSocketService | null = null;
 
   try {
-    console.log("🚀 Starting advanced chat server...");
+    console.log("Starting advanced chat server...");
 
     // Kick off the Redis connection attempt now (rather than on first cache/rate-limit
     // use) so health checks reflect real state quickly and early requests aren't slowed
@@ -64,19 +70,22 @@ export const startServer = async () => {
       process.env["MONGO_URI"] ||
       "mongodb://localhost:27018/job-platform";
 
-    if (MONGODB_URI.startsWith("mongodb+srv://") && process.env["NODE_ENV"] !== "production") {
+    if (
+      MONGODB_URI.startsWith("mongodb+srv://") &&
+      process.env["NODE_ENV"] !== "production"
+    ) {
       // Public resolvers are often more reliable for SRV records in local dev.
       // Not in production: there the VPC resolver is the reliable one.
       dns.setServers(["8.8.8.8", "1.1.1.1"]);
     }
 
-    console.log("🔄 Connecting to MongoDB...");
+    console.log("Connecting to MongoDB...");
     try {
       await mongoose.connect(MONGODB_URI);
       mongoConnected = true;
-      console.log("✅ MongoDB connected");
+      console.log("MongoDB connected");
     } catch (mongoError) {
-      console.error("⚠️ MongoDB connection failed, starting in degraded mode:");
+      console.error("MongoDB connection failed, starting in degraded mode:");
       console.error(mongoError);
     }
 
@@ -86,14 +95,14 @@ export const startServer = async () => {
       try {
         wsService = new WebSocketService(httpServer);
         setWebSocketService(wsService);
-        console.log("✅ WebSocket service initialized");
+        console.log("WebSocket service initialized");
         chatStackEnabled = true;
       } catch (chatError) {
-        console.error("⚠️ WebSocket service failed; REST API will still run:");
+        console.error("WebSocket service failed; REST API will still run:");
         console.error(chatError);
       }
     } else {
-      console.log("⚠️ Chat services are disabled until MongoDB is reachable");
+      console.log("Chat services are disabled until MongoDB is reachable");
     }
 
     const host = process.env["HOST"] || "0.0.0.0";
@@ -103,11 +112,11 @@ export const startServer = async () => {
         `🚀 API server running on http://${host === "0.0.0.0" ? "localhost" : host}:${PORT}`,
       );
       if (chatStackEnabled) {
-        console.log(`🔌 WebSocket server ready for connections`);
+        console.log(`WebSocket server ready for connections`);
       } else if (mongoConnected) {
-        console.log(`⚠️ MongoDB OK but the WebSocket service failed to start`);
+        console.log(`MongoDB OK but the WebSocket service failed to start`);
       } else {
-        console.log(`⚠️ Running in degraded mode (no database/chat)`);
+        console.log(`Running in degraded mode (no database/chat)`);
       }
     });
 
@@ -115,11 +124,11 @@ export const startServer = async () => {
     const shutdown = async (signal: string) => {
       if (shuttingDown) return;
       shuttingDown = true;
-      console.log(`🛑 Received ${signal}, shutting down gracefully...`);
+      console.log(`Received ${signal}, shutting down gracefully...`);
 
       const forceExitTimer = setTimeout(() => {
         logError("shutdown_timed_out", { signal });
-        console.error("❌ Graceful shutdown timed out, forcing exit");
+        console.error("Graceful shutdown timed out, forcing exit");
         process.exit(1);
       }, SHUTDOWN_TIMEOUT_MS);
       forceExitTimer.unref();
@@ -130,12 +139,12 @@ export const startServer = async () => {
         await new Promise<void>((resolve, reject) => {
           httpServer.close((err) => (err ? reject(err) : resolve()));
         });
-        console.log("✅ HTTP server closed");
+        console.log("HTTP server closed");
 
         if (wsService) {
           await wsService.close();
           clearWebSocketService();
-          console.log("✅ WebSocket server closed");
+          console.log("WebSocket server closed");
         }
 
         await stopEmailWorker();
@@ -144,7 +153,7 @@ export const startServer = async () => {
 
         if (mongoose.connection.readyState !== 0) {
           await mongoose.connection.close();
-          console.log("✅ MongoDB connection closed");
+          console.log("MongoDB connection closed");
         }
 
         await flushSentry();
@@ -155,7 +164,7 @@ export const startServer = async () => {
       } catch (err) {
         clearTimeout(forceExitTimer);
         logError("shutdown_failed", { signal, error: String(err) });
-        console.error("❌ Error during graceful shutdown:", err);
+        console.error("Error during graceful shutdown:", err);
         process.exit(1);
       }
     };
@@ -163,7 +172,7 @@ export const startServer = async () => {
     process.on("SIGTERM", () => void shutdown("SIGTERM"));
     process.on("SIGINT", () => void shutdown("SIGINT"));
   } catch (err) {
-    console.error("❌ Failed to start advanced chat server:", err);
+    console.error("Failed to start advanced chat server:", err);
     process.exit(1);
   }
 };
