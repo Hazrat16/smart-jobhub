@@ -166,6 +166,9 @@ resource "aws_ecs_task_definition" "this" {
       name      = "log-router"
       image     = var.log_router_image
       essential = true
+      # ECS sets this on every FireLens container anyway; leaving it out makes
+      # each plan replace the task definition.
+      user = "0"
       # Shares the task's memory; Fluent Bit needs little.
       memoryReservation = 50
 
