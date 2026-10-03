@@ -23,8 +23,8 @@ Atlas M0 is free.
 
 ## First apply
 
-CI applies on every merge to `main` that touches `infra/**`, so merging the tfvars change is enough.
-From a laptop instead (admin credentials):
+Merging doesn't apply anything. After merging the tfvars change, run **Actions → infra → Run
+workflow** from `main` with Environment `staging`. From a laptop instead (admin credentials):
 
 ```bash
 cd infra/envs/staging
@@ -50,8 +50,8 @@ To add a key, add it to `api_secret_keys` **and** to the secret value *before* m
 2. **Actions → deploy-api** and **deploy-web**, environment staging, version empty. This creates `api-v1` /
    `web-v1` and registers them. With 0 desired tasks nothing starts yet; the run says so and doesn't
    mark the version as tested.
-3. Set `api_desired_count` and `web_desired_count` to `1` in `terraform.tfvars` and merge. The services
-   start on the version from step 2.
+3. Set `api_desired_count` and `web_desired_count` to `1` in `terraform.tfvars`, merge, and run
+   **infra** for `staging`. The services start on the version from step 2.
 4. Run the deploy again with version `api-v1` / `web-v1`. This time the smoke test runs, and the version
    is marked as passed staging, so it can be promoted to production.
 

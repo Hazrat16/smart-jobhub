@@ -75,7 +75,7 @@ The browser only ever talks to one origin, so the same image runs in staging and
 | **Releases** | Manual and versioned (`api-v12`). Built once, pushed to IMMUTABLE ECR tags, and promoted to prod only after passing staging, behind an approval. The smoke test confirms the new version is serving. [Releasing](docs/releasing.md) |
 | **Safe deploys** | ECS circuit breaker with automatic rollback. The pipeline watches the new deployment's rollout state, so a rollback fails the run. Rolling back = promoting the previous version. |
 | **Security** | GitHub OIDC only, no AWS keys. One role per workflow file, scoped to its own app. A permissions boundary on everything CI creates. Secrets only in Secrets Manager. Tasks reachable only from the ALB. TLS to Valkey and Atlas. |
-| **Infrastructure as code** | Terraform with remote state and native locking. One environment module, used by staging and prod. Staging applies on merge; prod applies the exact saved plan that was approved. Tests run against a mocked AWS provider. |
+| **Infrastructure as code** | Terraform with remote state and native locking. One environment module, used by staging and prod. Applies are manual runs, never on merge; prod applies the exact saved plan that was approved. Tests run against a mocked AWS provider. |
 | **Scaling** | CPU target tracking (api 1–3, web 1–2 tasks); the Redis adapter delivers chat across tasks. |
 | **Observability** | CloudWatch alarms (5xx, p95 latency, no healthy targets, CPU and memory, Valkey memory, failed deployments) → email. Sentry tagged with environment and release. Structured JSON logs. |
 | **Operations** | A [runbook](docs/runbook.md) section for every alarm, a monthly AWS budget alert, and a quarterly [database restore drill](docs/restore-drill.md). |

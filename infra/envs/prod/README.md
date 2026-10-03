@@ -18,8 +18,9 @@ Route 53, Secrets Manager and logs ~$4. About **$65/month**, plus Atlas Flex ($8
 ## How infra changes reach prod
 
 1. **PR:** `infra.yml` plans staging **and** prod; both plans are in the job summary.
-2. **Merge:** staging applies. Prod is not touched.
-3. **Run:** Actions → **infra** → **Run workflow** from `main`. `plan-prod` plans prod from current
+2. **Merge:** nothing is applied.
+3. **Run:** Actions → **infra** → **Run workflow** from `main`, Environment `production` (apply
+   `staging` the same way first). `plan-prod` plans prod from current
    `main`, saves the plan file to `s3://<state bucket>/plans/prod/`, and shows it in the job summary.
 4. **Approve:** `apply-prod` waits on the `production` environment. Read the plan in `plan-prod`'s
    summary, then approve (or **Reject** to drop it). It applies **that saved file**, after checking its
@@ -31,7 +32,7 @@ If the prod plan has no changes, there's nothing to approve. App versions are de
 ## First apply
 
 1. Set `zone_name` and `domain_name` in `terraform.tfvars`.
-2. Merge, then run **infra** manually from `main` and approve `apply-prod`. The first apply waits for ACM validation (2–5 minutes) and Valkey
+2. Merge, then run **infra** from `main` with Environment `production` and approve `apply-prod`. The first apply waits for ACM validation (2–5 minutes) and Valkey
    (about 10 minutes).
 3. Create the prod Atlas cluster and fill `/job-platform/prod/api` (`infra/DATA.md`). Use **different**
    values from staging.

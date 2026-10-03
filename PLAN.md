@@ -50,7 +50,7 @@ infra/
 .github/workflows/
   api.yml                 paths: apps/api/**  → CI, then deploy staging → approve → prod
   web.yml                 paths: apps/web/**  → same
-  infra.yml               paths: infra/**     → fmt/validate/tflint/checkov/plan on PR; apply on merge
+  infra.yml               paths: infra/**     → fmt/validate/tflint/checkov/plan on PR; apply only from a manual run
 docs/
   architecture.md, decisions/ (ADRs), runbook.md
 README.md                 live demo, badges, diagram, "production readiness" section
@@ -206,20 +206,23 @@ README.md                 live demo, badges, diagram, "production readiness" sec
   smoke test. A service with 0 desired tasks deploys but isn't marked as tested.
 - ECR now keeps 200 versions (was 50). Otherwise the version prod runs could expire, and prod couldn't
   start new tasks.
-- `infra.yml` still applies staging **infra** on merge to `main` (Terraform, not app deploys). Say if
-  that should become manual too.
+- ~~`infra.yml` still applies staging **infra** on merge to `main`. Say if that should become manual
+  too.~~ Resolved 2026-10-03: it's manual too (Phase 7 notes).
 - `apps/api/deploy/task-def.json` isn't used (see Phase 4 notes); the deploy action derives the new
   revision from the family's latest one.
 
 ### Phase 7 notes
 
-- **Infra flow (industry standard, approved):** PR → plan staging + prod. Merge → staging applies
-  automatically (the reviewed PR is the approval). Prod is a **manual** run of `infra.yml` from `main`
-  (workflow_dispatch): `plan-prod` saves a plan to `s3://<state>/plans/prod/` → `apply-prod` waits on
-  the `production` environment and applies **that file** after checking its SHA-256. Terraform refuses
-  it if prod state changed in between. No prod changes means no approval. (Changed 2026-10-03: plans
-  used to be cut on every merge, and unanswered approvals held the `terraform-prod` lock, queuing every
-  later prod apply behind stale plans.)
+- **Infra flow:** PR → checks + plan staging + prod. **Merging runs nothing.** Applying is a manual
+  run of `infra.yml` from `main` (workflow_dispatch, Environment input):
+  - `staging`: plan and apply in one job (the PR's reviewed plan is the review).
+  - `production`: `plan-prod` saves a plan to `s3://<state>/plans/prod/` → `apply-prod` waits on the
+    `production` environment and applies **that file** after checking its SHA-256. Terraform refuses it
+    if prod state changed in between. No prod changes means no approval.
+
+  (Changed 2026-10-03 at the owner's request: first prod, then staging moved off merge. Prod plans used
+  to be cut on every merge, and unanswered approvals held the `terraform-prod` lock, queuing every later
+  prod apply behind stale plans. Now nothing deploys or applies unless someone runs it.)
 - `modules/environment` is the one composition. `envs/staging` and `envs/prod` only set values, so
   the two can't drift. `moved` blocks keep an already-applied staging in place.
 - `ecs-service` autoscaling: an Application Auto Scaling target is always registered (so changing
@@ -230,7 +233,7 @@ README.md                 live demo, badges, diagram, "production readiness" sec
   each). Prod ≈ $65/month + Atlas Flex.
 - The circuit breaker with rollback has been on every service since step 4. The deploy action fails the
   run if ECS rolls back.
-- The planner now also trusts `ref:refs/heads/main` for infra.yml (the prod plan after merge) and may
+- The planner now also trusts `ref:refs/heads/main` for infra.yml (manual runs from main) and may
   write `plans/*`; saved plans expire after 7 days. **Re-apply the bootstrap.**
 
 ### Phase 8 notes
