@@ -103,7 +103,7 @@ data "aws_iam_policy_document" "planner_state" {
     ]
   }
 
-  # Saved prod plans: written after merge, applied after approval by
+  # Saved prod plans: written by manual prod runs, applied after approval by
   # infra-deployer. The apply job checks the file's SHA-256 against the plan
   # job's output, so an overwrite (e.g. from a PR session) is refused.
   statement {
@@ -127,7 +127,7 @@ module "infra_planner" {
   oidc_provider_arn = aws_iam_openid_connect_provider.github.arn
   subjects = flatten([for r in local.oidc_repos : [
     "${local.oidc_prefix}:pull_request:job_workflow_ref:${r}/.github/workflows/infra.yml@refs/pull/*/merge",
-    # After merge: the prod plan that waits for approval.
+    # Manual runs from main: the prod plan that waits for approval.
     "${local.oidc_prefix}:ref:refs/heads/main:job_workflow_ref:${r}/.github/workflows/infra.yml@refs/heads/main",
   ]])
 

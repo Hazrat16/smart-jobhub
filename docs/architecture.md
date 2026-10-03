@@ -46,8 +46,9 @@ flowchart LR
 flowchart LR
   pr[Pull request] --> ci["CI: audit · lint · typecheck · tests<br/>docker build · Trivy · CodeQL<br/>terraform fmt/validate/test/tflint/checkov<br/>plan staging + prod"]
   ci --> merge[Merge to main]
-  merge --> infra["infra: apply staging<br/>save prod plan"]
-  infra --> approve1{Approve}
+  merge -. "Run workflow (manual)" .-> infra["infra · staging<br/>plan → apply"]
+  merge -. "Run workflow (manual)" .-> infraprod["infra · production<br/>save prod plan"]
+  infraprod --> approve1{Approve}
   approve1 --> prodinfra[apply saved prod plan]
 
   merge -. "Run workflow (manual)" .-> rel
@@ -62,7 +63,8 @@ flowchart LR
   `main` ([ADR 5](decisions/0005-github-oidc-least-privilege.md)).
 - **Releases.** Versions are manual, immutable, and must pass staging before prod
   ([ADR 6](decisions/0006-manual-versioned-releases.md), `docs/releasing.md`).
-- **Terraform.** Staging applies on merge, and prod applies the exact plan that was approved
+- **Terraform.** Nothing applies on merge. Each environment is applied by a manual run, and prod
+  applies the exact plan that was approved
   ([ADR 7](decisions/0007-terraform-state-and-apply-flow.md)).
 
 ## Infrastructure code
