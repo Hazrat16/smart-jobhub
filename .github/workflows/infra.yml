@@ -1,18 +1,25 @@
 name: infra
+run-name: "${{ github.event_name == 'workflow_dispatch' && format('infra apply → {0}', inputs.environment) || github.event.pull_request.title }}"
 
+# PRs: checks and plans only. Merging to main runs nothing.
+# Applying is manual: Actions → infra → Run workflow (from main), pick the
+# environment. Production also waits for approval of the saved plan.
 on:
   pull_request:
     branches: [main]
-  push:
-    branches: [main]
-  # Production infra: Actions → infra → Run workflow (from main). Only a run
-  # started this way plans prod and waits for approval, so nothing piles up.
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to apply
+        type: choice
+        options: [staging, production]
+        default: staging
+        required: true
 
 permissions:
   contents: read
 
-# PRs: a new push to the same PR cancels its older run. Pushes to main: no
+# PRs: a new push to the same PR cancels its older run. Manual runs: no
 # workflow-level lock (a run waiting for prod approval would block every later
 # run). The per-job terraform-staging / terraform-prod groups below still make
 # applies take turns.
@@ -29,7 +36,7 @@ jobs:
   # Path filtering happens here instead of in `on.paths`, so the required
   # `infra-ci` check always reports a result and never blocks unrelated PRs.
   changes:
-    if: github.event_name != 'workflow_dispatch'
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
@@ -150,13 +157,12 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Staging infra applies on merge: the PR's reviewed plan is the approval.
+  # Staging (manual runs only): plan and apply in one go; the PR's reviewed
+  # plan is the review.
   apply-staging:
-    needs: [changes, static]
     if: >-
-      github.event_name == 'push'
-      && needs.changes.outputs.infra == 'true'
-      && vars.AWS_INFRA_DEPLOYER_ROLE_ARN != ''
+      github.event_name == 'workflow_dispatch'
+      && inputs.environment == 'staging'
     runs-on: ubuntu-latest
     environment: staging
     concurrency:
@@ -169,6 +175,13 @@ jobs:
       run:
         working-directory: infra/envs/staging
     steps:
+      # The AWS roles only trust main; fail with a clear message instead.
+      - name: Check the run is from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Run this workflow from main (\"Use workflow from\")."
+          exit 1
+
       - uses: actions/checkout@v4
 
       - uses: hashicorp/setup-terraform@v3
@@ -188,17 +201,26 @@ jobs:
         run: terraform init -input=false -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}"
 
       - name: terraform plan
-        run: terraform plan -input=false -no-color -lock-timeout=5m -out=staging.tfplan
+        run: |
+          terraform plan -input=false -no-color -lock-timeout=5m -out=staging.tfplan
+          {
+            echo "### staging plan (applied below)"
+            echo '```'
+            terraform show -no-color staging.tfplan | tail -c 60000
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: terraform apply
         run: terraform apply -input=false -no-color -lock-timeout=5m staging.tfplan
 
   # Prod (manual runs only): plan, save the plan, and apply exactly that file
-  # after a reviewer approves the `production` environment. Merges never touch
-  # prod, so an unanswered approval can't hold the terraform-prod lock and
-  # block later applies. Reject the approval to drop a run you don't want.
+  # after a reviewer approves the `production` environment. Only a run you
+  # started waits, so an unanswered approval can't pile up behind merges.
+  # Reject the approval to drop a run you don't want.
   plan-prod:
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      && inputs.environment == 'production'
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -283,7 +283,7 @@ commit status deploy/staging/api-vN ✓
 
 ### Infrastructure changes
 
-- **Merge to `main`:** staging applies automatically, because the reviewed PR is the approval.
+- **Merge to `main`:** nothing is applied. Staging and production are each applied by a manual run.
 - **Production:** a manual run from `main` saves a plan to **S3**, waits for approval, and then **that exact plan file** is
   applied after its SHA-256 is checked. If production changed in the meantime, Terraform refuses the
   stale plan. What was reviewed is exactly what runs.

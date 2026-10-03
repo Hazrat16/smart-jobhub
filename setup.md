@@ -379,10 +379,11 @@ gh pr checks --watch && gh pr merge --squash --delete-branch
 git checkout main && git pull
 ```
 
-🌐 **Website:** GitHub → **Actions** → the newest **infra** run
+🌐 **Website:** GitHub → **Actions** → **infra** → **Run workflow** (Use workflow from: `main`, Environment: **`staging`**) → **Run workflow**
 
-- `apply-staging` creates staging. It takes **about 15 minutes**.
-- Production isn't touched. A merge never changes prod; you start it yourself in step 23.
+- Merging only saved the settings; nothing is applied on merge. This run's `apply-staging` creates
+  staging. It takes **about 15 minutes**.
+- Production isn't touched. You start it yourself in step 23.
 
 ✅ **You should see** `apply-staging` turn green.
 
@@ -494,8 +495,8 @@ gh pr checks --watch && gh pr merge --squash --delete-branch
 git checkout main && git pull
 ```
 
-🌐 **Website:** GitHub → Actions → wait until the **infra** run's `apply-staging` is green
-Then wait 2–3 more minutes.
+🌐 **Website:** GitHub → **Actions** → **infra** → **Run workflow** (Use workflow from: `main`, Environment: **`staging`**) → **Run workflow**, and wait until
+its `apply-staging` is green. Then wait 2–3 more minutes.
 
 ✅ **You should see,** 💻 in the terminal:
 
@@ -567,7 +568,7 @@ curl -s -X POST <staging-url>/api/auth/bootstrap-admin \
 
 ## Step 23. Create production
 
-🌐 **Website:** GitHub → **Actions** → **infra** → **Run workflow** (Use workflow from: `main`) → **Run workflow**
+🌐 **Website:** GitHub → **Actions** → **infra** → **Run workflow** (Use workflow from: `main`, Environment: **`production`**) → **Run workflow**
 
 1. [ ] Open the new run. When `plan-prod` is green, read the plan in its summary.
 2. [ ] On `apply-prod`, click **Review deployments**, tick **production**, then **Approve and deploy**.
@@ -759,7 +760,7 @@ $110 for everything. When you want it:
 
 1. 📝 `infra/envs/prod/main.tf`: change `observability_enabled = false` to `true`.
 2. 💻 Save it with a pull request (the same commands as in step 19). Then 🌐 GitHub → Actions →
-   **infra** → **Run workflow** from `main`, and approve `apply-prod`.
+   **infra** → **Run workflow** from `main`, Environment `production`, and approve `apply-prod`.
 3. 🌐 GitHub → Actions → **deploy-api** → environment `production`, **Version** = the version that's
    live now (e.g. `api-v1`) → approve. This connects the API to it, and changes nothing else.
 4. 💻 Open it the same way, with `prod`: `bash scripts/grafana-tunnel.sh prod --password` and
@@ -799,7 +800,8 @@ When you buy one (it's only $3–15 a year):
    `email_from = "Smart JobHub <no-reply@<your-domain>>"`. 🌐 In Resend → **Domains**, add the domain
    and copy its DNS records into Route 53 (console → Route 53 → your zone → Create record). Then
    click **Verify**.
-4. 💻 Save with a pull request (like step 19). Then approve prod in GitHub Actions. This switches each
+4. 💻 Save with a pull request (like step 19). Then 🌐 run **infra** from `main` with Environment
+   `staging`, and again with `production` (approve `apply-prod`). This switches each
    environment from CloudFront to the domain: HTTPS certificate, DNS record, the load balancer open
    to the internet, and CloudFront removed.
 5. 💻 Update the addresses:
@@ -820,7 +822,7 @@ When you buy one (it's only $3–15 a year):
 | API won't start: `did not contain json key …`             | A line is missing from the step 17 / 25 file. Fix it, upload it again, then re-run the deploy with the same version.                    |
 | `/api/health/ready` says `Database not connected`         | Check the step 16 / 24 connection string, the password, and Network Access `0.0.0.0/0`.                                                 |
 | "has no successful staging deploy"                        | Do step 20 for that version first.                                                                                                      |
-| No live SSLCommerz store yet                              | 📝 In `infra/envs/prod/main.tf`, set `sslcommerz_sandbox = true`, save it with a pull request, and use your sandbox details in step 25. |
+| No live SSLCommerz store yet                              | 📝 In `infra/envs/prod/main.tf`, set `sslcommerz_sandbox = true`, save it with a pull request, run **infra** for `production`, and use sandbox details in step 25. |
 | Password-reset emails don't arrive                        | Without a domain they only go to your own Resend address (step 12). Add a domain to fix it.                                             |
 | No alarm emails                                           | Step 15 / 23: confirm the subscription email.                                                                                           |
 | `session-manager-plugin is not installed`                 | Do "One time: install the Session Manager plugin" under Monitoring.                                                                     |
