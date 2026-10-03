@@ -382,7 +382,7 @@ git checkout main && git pull
 🌐 **Website:** GitHub → **Actions** → the newest **infra** run
 
 - `apply-staging` creates staging. It takes **about 15 minutes**.
-- `apply-prod` then **waits for approval.** Leave it for now; you'll approve it in step 23.
+- Production isn't touched. A merge never changes prod; you start it yourself in step 23.
 
 ✅ **You should see** `apply-staging` turn green.
 
@@ -495,7 +495,7 @@ git checkout main && git pull
 ```
 
 🌐 **Website:** GitHub → Actions → wait until the **infra** run's `apply-staging` is green
-(`apply-prod` waits again; ignore it). Then wait 2–3 more minutes.
+Then wait 2–3 more minutes.
 
 ✅ **You should see,** 💻 in the terminal:
 
@@ -567,12 +567,14 @@ curl -s -X POST <staging-url>/api/auth/bootstrap-admin \
 
 ## Step 23. Create production
 
-🌐 **Website:** GitHub → **Actions** → the newest **infra** run → the waiting **`apply-prod`** job
+🌐 **Website:** GitHub → **Actions** → **infra** → **Run workflow** (Use workflow from: `main`) → **Run workflow**
 
-1. [ ] Click **Review deployments**, tick **production**, then **Approve and deploy**.
-2. [ ] Wait until it's green (about 15 minutes).
-3. [ ] 📧 Confirm the new alert-subscription email (production has its own).
-4. [ ] 💻 **Terminal:** get production's address and tell GitHub:
+1. [ ] Open the new run. When `plan-prod` is green, read the plan in its summary.
+2. [ ] On `apply-prod`, click **Review deployments**, tick **production**, then **Approve and deploy**.
+       Don't want it? Click **Reject** instead; nothing changes and nothing stays waiting.
+3. [ ] Wait until it's green (about 15 minutes).
+4. [ ] 📧 Confirm the new alert-subscription email (production has its own).
+5. [ ] 💻 **Terminal:** get production's address and tell GitHub:
 
 ```bash
 PROD_URL="https://$(aws cloudfront list-distributions \
@@ -756,8 +758,8 @@ Production doesn't have it yet, because it adds about **$30/month** and the budg
 $110 for everything. When you want it:
 
 1. 📝 `infra/envs/prod/main.tf`: change `observability_enabled = false` to `true`.
-2. 💻 Save it with a pull request (the same commands as in step 19), then approve `apply-prod` in
-   GitHub Actions.
+2. 💻 Save it with a pull request (the same commands as in step 19). Then 🌐 GitHub → Actions →
+   **infra** → **Run workflow** from `main`, and approve `apply-prod`.
 3. 🌐 GitHub → Actions → **deploy-api** → environment `production`, **Version** = the version that's
    live now (e.g. `api-v1`) → approve. This connects the API to it, and changes nothing else.
 4. 💻 Open it the same way, with `prod`: `bash scripts/grafana-tunnel.sh prod --password` and

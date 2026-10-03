@@ -214,9 +214,12 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 ### Phase 7 notes
 
 - **Infra flow (industry standard, approved):** PR → plan staging + prod. Merge → staging applies
-  automatically (the reviewed PR is the approval) → `plan-prod` saves a plan to `s3://<state>/plans/prod/`
-  → `apply-prod` waits on the `production` environment and applies **that file** after checking its
-  SHA-256. Terraform refuses it if prod state changed in between. No prod changes means no approval.
+  automatically (the reviewed PR is the approval). Prod is a **manual** run of `infra.yml` from `main`
+  (workflow_dispatch): `plan-prod` saves a plan to `s3://<state>/plans/prod/` → `apply-prod` waits on
+  the `production` environment and applies **that file** after checking its SHA-256. Terraform refuses
+  it if prod state changed in between. No prod changes means no approval. (Changed 2026-10-03: plans
+  used to be cut on every merge, and unanswered approvals held the `terraform-prod` lock, queuing every
+  later prod apply behind stale plans.)
 - `modules/environment` is the one composition. `envs/staging` and `envs/prod` only set values, so
   the two can't drift. `moved` blocks keep an already-applied staging in place.
 - `ecs-service` autoscaling: an Application Auto Scaling target is always registered (so changing
