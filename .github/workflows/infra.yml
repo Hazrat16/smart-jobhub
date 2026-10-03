@@ -21,7 +21,7 @@ permissions:
 
 # PRs: a new push to the same PR cancels its older run. Manual runs: no
 # workflow-level lock (a run waiting for prod approval would block every later
-# run). The per-job terraform-staging / terraform-prod groups below still make
+# run). The per-job terraform-staging / terraform-prod-apply groups below still make
 # applies take turns.
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('infra-{0}', github.ref) || format('infra-run-{0}', github.run_id) }}
@@ -295,8 +295,10 @@ jobs:
     runs-on: ubuntu-latest
     # Required reviewers: read the plan in plan-prod's summary, then approve.
     environment: production
+    # Renamed from terraform-prod: an old run (#11) stuck waiting for approval
+    # holds that group and couldn't be cancelled, rejected or deleted.
     concurrency:
-      group: terraform-prod
+      group: terraform-prod-apply
       cancel-in-progress: false
     permissions:
       contents: read
