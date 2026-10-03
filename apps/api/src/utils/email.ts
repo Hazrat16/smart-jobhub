@@ -14,11 +14,14 @@ const IS_DEV =
 // Read per call (not at import) so tests and late-loaded env vars work.
 // Resend's onboarding@resend.dev sender only delivers to the account owner; set
 // EMAIL_FROM to an address on a domain verified in Resend for real users.
-const emailFrom = () => process.env["EMAIL_FROM"] || "Job Platform <onboarding@resend.dev>";
+const emailFrom = () =>
+  process.env["EMAIL_FROM"] || "Job Platform <onboarding@resend.dev>";
 
 /** Public link for the verify-email endpoint (API_PUBLIC_BASE_URL is the site's URL in AWS). */
 export function verificationLink(token: string): string {
-  const base = (process.env["API_PUBLIC_BASE_URL"] || "http://localhost:5000").replace(/\/+$/, "");
+  const base = (
+    process.env["API_PUBLIC_BASE_URL"] || "http://localhost:5000"
+  ).replace(/\/+$/, "");
   return `${base}/api/auth/verify-email?token=${encodeURIComponent(token)}`;
 }
 
@@ -72,14 +75,14 @@ export const sendResetPasswordEmail = async (to: string, link: string) => {
     });
 
     if (error) {
-      console.error("❌ Resend email error:", error);
+      console.error("Resend email error:", error);
       return false;
     }
 
-    console.log("✅ Reset email sent:", data);
+    console.log("Reset email sent:", data);
     return true;
   } catch (error) {
-    console.error("❌ Unexpected error sending reset email:", error);
+    console.error("Unexpected error sending reset email:", error);
     return false;
   }
 };

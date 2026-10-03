@@ -1,13 +1,13 @@
-import { Server as SocketIOServer, Socket } from "socket.io";
-import { Server as HTTPServer } from "http";
 import { createAdapter } from "@socket.io/redis-adapter";
+import { Server as HTTPServer } from "http";
 import IORedis from "ioredis";
 import jwt from "jsonwebtoken";
-import Conversation from "../models/conversationModel.js";
+import { Socket, Server as SocketIOServer } from "socket.io";
 import { getAllowedOrigins } from "../config/corsOrigins.js";
-import { logInfo, logWarnThrottled } from "../utils/logger.js";
+import Conversation from "../models/conversationModel.js";
 import * as chatService from "../services/chatService.js";
 import { HttpError } from "../utils/http.js";
+import { logInfo, logWarnThrottled } from "../utils/logger.js";
 
 const REDIS_ADAPTER_ERROR_LOG_INTERVAL_MS = 60_000;
 
@@ -93,29 +93,29 @@ export class WebSocketService {
         const tokenFromAuth = socket.handshake.auth["token"];
         const tokenFromHeader = socket.handshake.headers["authorization"];
         const token = tokenFromAuth || tokenFromHeader;
-        
+
         if (!token) {
           return next(new Error("Authentication token required"));
         }
 
         // Remove 'Bearer ' prefix if present
         const cleanToken = String(token).replace("Bearer ", "");
-        
+
         const decoded = jwt.verify(
           cleanToken,
           process.env["JWT_SECRET"] || "fallback_secret",
         ) as { id?: string; role?: string };
-        
+
         if (decoded.id) {
           socket.userId = decoded.id;
           // socket.data travels with fetchSockets() across instances (Redis adapter).
           socket.data.userId = decoded.id;
         }
         if (decoded.role) socket.userRole = decoded.role;
-        
+
         next();
       } catch (error) {
-        console.error("❌ WebSocket authentication failed:", error);
+        console.error("WebSocket authentication failed:", error);
         next(new Error("Invalid authentication token"));
       }
     });
@@ -126,8 +126,8 @@ export class WebSocketService {
    */
   private setupEventHandlers(): void {
     this.io.on("connection", (socket: AuthenticatedSocket) => {
-      console.log(`🔌 User ${socket.userId} connected to WebSocket`);
-      
+      console.log(`User ${socket.userId} connected to WebSocket`);
+
       this.handleConnection(socket);
       this.setupSocketEvents(socket);
     });
@@ -142,10 +142,10 @@ export class WebSocketService {
     // Personal room: sendToUser targets it, so delivery works for every tab the
     // user has open and, through the Redis adapter, on every API task.
     socket.join(`user:${socket.userId}`);
-    
+
     // Send online status to other users
     this.broadcastUserStatus(socket.userId, true);
-    
+
     // Load user's conversations and join rooms
     this.loadUserConversations(socket);
   }
@@ -194,11 +194,20 @@ export class WebSocketService {
   /**
    * Handle sending a chat message
    */
-  private async handleSendMessage(socket: AuthenticatedSocket, data: any): Promise<void> {
+  private async handleSendMessage(
+    socket: AuthenticatedSocket,
+    data: any,
+  ): Promise<void> {
     try {
       if (!socket.userId) return;
 
-      const { receiverId, message, messageType = "text", attachments = [], replyTo } = data;
+      const {
+        receiverId,
+        message,
+        messageType = "text",
+        attachments = [],
+        replyTo,
+      } = data;
 
       // Delegates to the same service function the REST /chat/send endpoint uses,
       // so the two entry points can't drift into different behavior (durable write
@@ -220,9 +229,10 @@ export class WebSocketService {
         status: result.status,
       });
 
-      console.log(`📤 Message sent from ${socket.userId} to ${receiverId}`);
+      console.log(`Message sent from ${socket.userId} to ${receiverId}`);
     } catch (error) {
-      const errorMessage = error instanceof HttpError ? error.message : "Failed to send message";
+      const errorMessage =
+        error instanceof HttpError ? error.message : "Failed to send message";
       socket.emit("error", { message: errorMessage });
     }
   }
@@ -243,9 +253,8 @@ export class WebSocketService {
           isTyping: true,
         });
       }
-      
     } catch (error) {
-      console.error("❌ Error handling typing start:", error);
+      console.error("Error handling typing start:", error);
     }
   }
 
@@ -265,16 +274,18 @@ export class WebSocketService {
           isTyping: false,
         });
       }
-      
     } catch (error) {
-      console.error("❌ Error handling typing stop:", error);
+      console.error("Error handling typing stop:", error);
     }
   }
 
   /**
    * Handle marking messages as read
    */
-  private async handleMarkRead(socket: AuthenticatedSocket, data: any): Promise<void> {
+  private async handleMarkRead(
+    socket: AuthenticatedSocket,
+    data: any,
+  ): Promise<void> {
     try {
       if (!socket.userId) return;
 
@@ -285,7 +296,11 @@ export class WebSocketService {
       // ever updating ChatMessage.isRead or the conversation's unread count, so a
       // client relying solely on the socket path never actually had its unread
       // state persisted.
-      await chatService.markMessagesAsRead(socket.userId, senderId, conversationId);
+      await chatService.markMessagesAsRead(
+        socket.userId,
+        senderId,
+        conversationId,
+      );
 
       if (conversationId) {
         socket.to(`conversation:${conversationId}`).emit("messages_read", {
@@ -294,7 +309,7 @@ export class WebSocketService {
         });
       }
     } catch (error) {
-      console.error("❌ Error marking messages as read:", error);
+      console.error("Error marking messages as read:", error);
     }
   }
 
@@ -309,25 +324,29 @@ export class WebSocketService {
 
       if (conversationId) {
         socket.join(`conversation:${conversationId}`);
-        
+
         // Track user's rooms
         if (!this.userRooms.has(socket.userId)) {
           this.userRooms.set(socket.userId, new Set());
         }
         this.userRooms.get(socket.userId)?.add(conversationId);
-        
-        console.log(`👥 User ${socket.userId} joined conversation ${conversationId}`);
+
+        console.log(
+          `👥 User ${socket.userId} joined conversation ${conversationId}`,
+        );
       }
-      
     } catch (error) {
-      console.error("❌ Error joining conversation:", error);
+      console.error("Error joining conversation:", error);
     }
   }
 
   /**
    * Handle leaving a conversation
    */
-  private handleLeaveConversation(socket: AuthenticatedSocket, data: any): void {
+  private handleLeaveConversation(
+    socket: AuthenticatedSocket,
+    data: any,
+  ): void {
     try {
       if (!socket.userId) return;
 
@@ -335,15 +354,16 @@ export class WebSocketService {
 
       if (conversationId) {
         socket.leave(`conversation:${conversationId}`);
-        
+
         // Remove from user's rooms
         this.userRooms.get(socket.userId)?.delete(conversationId);
-        
-        console.log(`👋 User ${socket.userId} left conversation ${conversationId}`);
+
+        console.log(
+          `User ${socket.userId} left conversation ${conversationId}`,
+        );
       }
-      
     } catch (error) {
-      console.error("❌ Error leaving conversation:", error);
+      console.error("Error leaving conversation:", error);
     }
   }
 
@@ -354,23 +374,24 @@ export class WebSocketService {
     try {
       if (!socket.userId) return;
 
-      console.log(`🔌 User ${socket.userId} disconnected from WebSocket`);
-      
+      console.log(`User ${socket.userId} disconnected from WebSocket`);
+
       // Remove from user rooms
       this.userRooms.delete(socket.userId);
-      
+
       // Send offline status to other users
       this.broadcastUserStatus(socket.userId, false);
-      
     } catch (error) {
-      console.error("❌ Error handling disconnect:", error);
+      console.error("Error handling disconnect:", error);
     }
   }
 
   /**
    * Load user's conversations and join rooms
    */
-  private async loadUserConversations(socket: AuthenticatedSocket): Promise<void> {
+  private async loadUserConversations(
+    socket: AuthenticatedSocket,
+  ): Promise<void> {
     try {
       if (!socket.userId) return;
 
@@ -383,7 +404,7 @@ export class WebSocketService {
       for (const conversation of conversations) {
         const roomId = `conversation:${conversation._id}`;
         socket.join(roomId);
-        
+
         // Track user's rooms
         if (!this.userRooms.has(socket.userId!)) {
           this.userRooms.set(socket.userId!, new Set());
@@ -393,9 +414,8 @@ export class WebSocketService {
 
       // Send conversations to user
       socket.emit("conversations_loaded", { conversations });
-      
     } catch (error) {
-      console.error("❌ Error loading user conversations:", error);
+      console.error("Error loading user conversations:", error);
     }
   }
 
@@ -410,9 +430,8 @@ export class WebSocketService {
         isOnline,
         timestamp: new Date(),
       });
-      
     } catch (error) {
-      console.error("❌ Error broadcasting user status:", error);
+      console.error("Error broadcasting user status:", error);
     }
   }
 
@@ -429,7 +448,11 @@ export class WebSocketService {
   /**
    * Send message to conversation room
    */
-  public sendToConversation(conversationId: string, event: string, data: any): void {
+  public sendToConversation(
+    conversationId: string,
+    event: string,
+    data: any,
+  ): void {
     this.io.to(`conversation:${conversationId}`).emit(event, data);
   }
 
