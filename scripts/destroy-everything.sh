@@ -91,15 +91,24 @@ if $HAVE_GH && gh auth status >/dev/null 2>&1; then
   for wf in infra.yml deploy-api.yml deploy-web.yml; do
     for id in $(gh run list -R "$REPO" --workflow "$wf" --json databaseId,status \
       -q '.[] | select(.status != "completed") | .databaseId' 2>/dev/null); do
-      run gh run cancel -R "$REPO" "$id" || true
+      run gh run cancel -R "$REPO" "$id" || warn "Could not cancel run $id of $wf."
     done
-    run gh workflow disable -R "$REPO" "$wf" || true
+    run gh workflow disable -R "$REPO" "$wf" ||
+      warn "Could not disable $wf. Do it by hand (GitHub → Actions → $wf → ⋯ → Disable) or a workflow can recreate what this script deletes."
   done
 else
   warn "gh isn't logged in: switch off infra, deploy-api and deploy-web by hand (GitHub → Actions → ⋯ → Disable)."
 fi
 
 # --- 2 & 3. Environments -----------------------------------------------------
+
+# Reuse providers already on disk. A fresh download of the AWS provider is
+# ~500 MB, and this machine is often a small root volume.
+if [[ -z "${TF_PLUGIN_CACHE_DIR:-}" && -d "$INFRA/bootstrap/.terraform/providers" ]]; then
+  export TF_PLUGIN_CACHE_DIR="${HOME}/.terraform.d/plugin-cache"
+  mkdir -p "$TF_PLUGIN_CACHE_DIR"
+  cp -al "$INFRA/bootstrap/.terraform/providers/." "$TF_PLUGIN_CACHE_DIR/" 2>/dev/null || true
+fi
 
 destroy_env() {
   local env="$1" dir="$INFRA/envs/$1"
@@ -151,9 +160,18 @@ if ! $BUCKET_EXISTS; then
 else
   WORK=$(mktemp -d)
   keep_work=false
-  trap '$keep_work && warn "Bootstrap state is kept in $WORK/infra/bootstrap/terraform.tfstate. Re-run the script, or cd there and run terraform destroy."' EXIT
-  cp -r "$INFRA" "$WORK/infra"
-  rm -rf "$WORK"/infra/bootstrap/.terraform "$WORK"/infra/envs/*/.terraform
+  trap 'if $keep_work; then warn "Bootstrap state is kept in $WORK/infra/bootstrap/terraform.tfstate. Re-run the script, or cd there and run terraform destroy."; else rm -rf "$WORK"; fi' EXIT
+  # Copy source only. .terraform holds the provider binary (hundreds of MB per
+  # environment) and *.tfplan is leftover plan output; copying either fills a
+  # small root disk. init below reuses TF_PLUGIN_CACHE_DIR.
+  mkdir -p "$WORK/infra"
+  tar -C "$INFRA" \
+    --exclude='.terraform' \
+    --exclude='*.tfplan' \
+    --exclude='*.tfstate' \
+    --exclude='*.tfstate.*' \
+    --exclude='crash.log' \
+    -cf - . | tar -C "$WORK/infra" -xf -
   B="$WORK/infra/bootstrap"
 
   cat > "$B/backend.tf" <<EOF
