@@ -95,19 +95,16 @@ docs/        architecture, releasing, runbook, restore drill, ADRs
 
 ## Run it locally
 
+Needs Docker and Node 24. From the repo root:
+
 ```bash
-# API + MongoDB + Redis, hot reload, on :5000
-cd apps/api && docker compose -f docker-compose.dev.yml up --build
-
-# Web on :3000 (proxies /api to :5000 in dev)
-cd apps/web && npm ci && npm run dev
-
-# Demo accounts and sample jobs
-cd apps/api && MONGODB_URI=mongodb://127.0.0.1:27017/job-platform \
-  DEMO_PASSWORD=choose-something SEED_DEMO_CONFIRM=yes npm run seed:demo
+make dev                                    # api + Mongo + Redis (Docker, :5000) and web (:3000); Ctrl-C stops all
+make seed DEMO_PASSWORD=choose-something    # demo accounts and sample jobs (in a second terminal)
+make test                                   # api tests against a throwaway Mongo on :27099
 ```
 
-Tests: `cd apps/api && docker run -d -p 27099:27017 mongo:7.0 && npm test`.
+`make help` lists the rest (`logs`, `ps`, `stop`, `down`, `clean`). The web dev server proxies `/api` to
+`:5000`. Optional keys (Resend, SSLCommerz, Groq) go in `apps/api/.env`.
 
 ## Setting up AWS from scratch
 

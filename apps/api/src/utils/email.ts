@@ -2,9 +2,15 @@ import dotenv from "dotenv";
 import { Resend } from "resend";
 dotenv.config(); // ensure .env is loaded if it wasn't already
 
-dotenv.config(); // ensure .env is loaded if it wasn't already
-
-const resend = new Resend(process.env["RESEND_API_KEY"]);
+// Created on first send, not at import: Resend throws without a key, and the API must still boot
+// without one (local dev, tests). Sends then fail like any other send error (logged, return false).
+let resendClient: Resend | undefined;
+const getResend = (): Resend => {
+  const key = process.env["RESEND_API_KEY"];
+  if (!key) throw new Error("RESEND_API_KEY is not set; email not sent");
+  resendClient ??= new Resend(key);
+  return resendClient;
+};
 
 const RESEND_TEST_EMAIL =
   process.env["RESEND_TEST_EMAIL"] || "hazrat17016@gmail.com";
@@ -36,7 +42,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
   const link = verificationLink(token);
   const effectiveTo = getEffectiveRecipient(to);
   try {
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
       from: emailFrom(),
       to: effectiveTo,
       subject: "Verify your email",
@@ -63,7 +69,7 @@ export const sendVerificationEmail = async (to: string, token: string) => {
 export const sendResetPasswordEmail = async (to: string, link: string) => {
   const effectiveTo = getEffectiveRecipient(to);
   try {
-    const { error, data } = await resend.emails.send({
+    const { error, data } = await getResend().emails.send({
       from: emailFrom(),
       to: effectiveTo,
       subject: "Reset your password",

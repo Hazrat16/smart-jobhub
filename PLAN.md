@@ -90,7 +90,8 @@ README.md                 live demo, badges, diagram, "production readiness" sec
 - [x] API tests could not run in CI: `src/utils/email.ts` builds the Resend client at import time and throws
       without `RESEND_API_KEY`, and the payment tests got 503 without SSLCommerz credentials. The failed
       teardown then left Mongo open, so the run hung. Fixed in `tests/helpers/testApp.ts` (dummy key +
-      `SSLCOMMERZ_ALLOW_TESTBOX`). Longer term, email.ts should create the client lazily.
+      `SSLCOMMERZ_ALLOW_TESTBOX`). ~~Longer term, email.ts should create the client lazily.~~ Done: the
+      Resend client is created on first send, so the API (and `make dev`) boots without `RESEND_API_KEY`.
 - [x] `npm audit --audit-level=high` failed on web (postcss nested in next). Fixed with an npm `overrides`
       entry (`postcss ^8.5.23`) instead of the breaking `next@16` upgrade. Remove it once Next ships a fixed postcss.
 
